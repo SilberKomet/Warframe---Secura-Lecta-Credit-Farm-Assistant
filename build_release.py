@@ -46,6 +46,7 @@ def main():
     print("Copying Python environment (this may take a moment)...")
     embed_dst = os.path.join(release_dir, embed_folder_name)
     shutil.copytree(embed_src, embed_dst)
+
     
     # 3. Create LECTA_SCRIPTS inside the python folder
     # This keeps the scripts separate from the python binaries
@@ -58,7 +59,8 @@ def main():
         "bounding_box_setup.py", 
         "fps_tracker.py", 
         "log_reader.py",
-        "PresentMon.exe"
+        "PresentMon.exe",
+        "requirements.txt"
     ]
     
     for file in script_files:
@@ -82,7 +84,8 @@ def main():
 
     # 6. Cleanup junk from the release python folder
     # Remove any existing .json configs or logs that might have been copied from your personal setup
-    for item in os.listdir(scripts_dst):
+    # (Only check for config files, not folders like easyocr_models)
+    for item in os.listdir(release_dir):
         if item.endswith(".json") or item.endswith(".png") or item == "OUTPUT":
              path = os.path.join(scripts_dst, item)
              if os.path.isfile(path):
