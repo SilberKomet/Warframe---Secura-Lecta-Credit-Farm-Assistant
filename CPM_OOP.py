@@ -2,6 +2,9 @@ import os
 import ctypes
 import sys
 import shutil
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+import pygame
+pygame.init() # Initialize all imported pygame modules
 
 # Ensure local modules in the same directory are found
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -19,6 +22,7 @@ import easyocr as ocr #pip install easyocr
 import mss #pip install mss
 import keyboard as key #pip install keyboard
 import numpy as np #pip install numpy
+import pydirectinput #pip install pydirectinput
 import pandas as pd #pip install pandas
 import pyqtgraph as pg #pip install pyqtgraph and pip install pyQt5
 import matplotlib.pyplot as plt #pip install matplotlib
@@ -1238,6 +1242,14 @@ class WarframeTracker(QtCore.QObject):
         self.data_updated.connect(self.update_plot)
         self.request_overlay_toggle.connect(self.toggle_overlay)
         self.setup_hotkeys()
+        
+        # --- Controller Setup (PS4 L3 -> Tab) ---
+        self.joystick = None
+        self.l3_pressed = False
+        self.init_controller()
+        self.controller_timer = QtCore.QTimer()
+        self.controller_timer.timeout.connect(self.poll_controller)
+        self.controller_timer.start(16) # Poll at ~60Hz
 
     def setup_hotkeys(self):
         key.add_hotkey('f8', self.start_run)
@@ -1246,6 +1258,59 @@ class WarframeTracker(QtCore.QObject):
         key.on_release_key('tab', self.on_tab_release)
         key.add_hotkey('f9', self.request_overlay_toggle.emit)
         key.add_hotkey('f10', self.request_run_end.emit)
+
+    def init_controller(self):
+        try:
+            # Init joystick module. Main pygame.init() is at top of file.
+            pygame.joystick.init()
+            
+            joystick_count = pygame.joystick.get_count()
+            if joystick_count > 0:
+                # If we don't already have a joystick, or if the one we had is gone.
+                if self.joystick is None:
+                    self.joystick = pygame.joystick.Joystick(0)
+                    self.joystick.init()
+                    print(f"[Controller] Connected: {self.joystick.get_name()}")
+                    print(f"[Controller] It has {self.joystick.get_numbuttons()} buttons. Press L3 to see its number in the diagnostic.")
+            elif self.joystick is not None:
+                # We had a joystick, but now we don't
+                print("[Controller] Disconnected.")
+                self.joystick = None
+
+        except Exception as e:
+            print(f"[Controller] Error initializing: {e}")
+            self.joystick = None
+
+    def poll_controller(self):
+        # If no joystick, try to initialize one periodically
+        if not self.joystick:
+            if not hasattr(self, 'last_joystick_check') or time.perf_counter() - self.last_joystick_check > 3.0:
+                self.last_joystick_check = time.perf_counter()
+                self.init_controller()
+            return
+        
+        try:
+            # Process all events from the queue. This is the standard pygame way.
+            for event in pygame.event.get():
+                # --- Diagnostic: Print all button presses ---
+                if event.type == pygame.JOYBUTTONDOWN:
+                    print(f"[Controller Diagnostic] Button {event.button} PRESSED")
+                # --- End Diagnostic ---
+
+                # Check if the event is for our target button (L3)
+                btn_index = 7 # Changed based on your diagnostic output
+                if event.type == pygame.JOYBUTTONDOWN and event.button == btn_index:
+                    self.l3_pressed = True
+                    print(f"[Controller] Button {btn_index} Pressed - Holding TAB")
+                    pydirectinput.keyDown('tab')
+                elif event.type == pygame.JOYBUTTONUP and event.button == btn_index:
+                    self.l3_pressed = False
+                    print(f"[Controller] Button {btn_index} Released - Releasing TAB")
+                    pydirectinput.keyUp('tab')
+        except pygame.error as e:
+            # This can happen if the controller disconnects
+            print(f"[Controller] Polling error (likely disconnected): {e}")
+            self.joystick = None
 
     def _start_log_timer_slot(self):
         self.log_timer.start(self.data_recording_interval_ms) 
