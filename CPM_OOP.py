@@ -130,6 +130,44 @@ class ConfigEditor(QtWidgets.QDialog):
         self.rois[name] = roi
         self.labels.append(lbl)
 
+    def load_boxes(self):
+        if 'scan_area' in self.data:
+            self.add_roi("Scan Area", self.data['scan_area'], 'g')
+        if 'credit_positions' in self.data:
+            for i, box in enumerate(self.data['credit_positions']):
+                self.add_roi(f"Credit {i+1}", box, 'y')
+        if self.data.get('track_kills') and 'kills' in self.data and self.data['kills']:
+             self.add_roi("Kills", self.data['kills'], 'r')
+
+    def save_and_close(self):
+        def get_abs_coords(roi):
+            pos = roi.pos()
+            size = roi.size()
+            l = int(pos.x() + self.offset_x)
+            t = int(pos.y() + self.offset_y)
+            r = int(l + size.x())
+            b = int(t + size.y())
+            return [l, t, r, b]
+
+        if "Scan Area" in self.rois:
+            self.data['scan_area'] = get_abs_coords(self.rois["Scan Area"])
+        if 'credit_positions' in self.data:
+            new_creds = []
+            for i in range(len(self.data['credit_positions'])):
+                name = f"Credit {i+1}"
+                if name in self.rois:
+                    new_creds.append(get_abs_coords(self.rois[name]))
+            self.data['credit_positions'] = new_creds
+        if "Kills" in self.rois:
+            self.data['kills'] = get_abs_coords(self.rois["Kills"])
+        self.accept()
+
+    def keyPressEvent(self, event):
+        if event.key() in (QtCore.Qt.Key_Enter, QtCore.Qt.Key_Return):
+            self.save_and_close()
+        else:
+            super().keyPressEvent(event)
+
 class AcolyteConfigDialog(QtWidgets.QDialog):
     def __init__(self, current_config, parent=None):
         super().__init__(parent)
@@ -400,43 +438,6 @@ class AcolyteWarner(QtWidgets.QLabel):
         """Hides the positioning preview."""
         self.flash_on = False
         self.hide()
-    def load_boxes(self):
-        if 'scan_area' in self.data:
-            self.add_roi("Scan Area", self.data['scan_area'], 'g')
-        if 'credit_positions' in self.data:
-            for i, box in enumerate(self.data['credit_positions']):
-                self.add_roi(f"Credit {i+1}", box, 'y')
-        if self.data.get('track_kills') and 'kills' in self.data and self.data['kills']:
-             self.add_roi("Kills", self.data['kills'], 'r')
-
-    def save_and_close(self):
-        def get_abs_coords(roi):
-            pos = roi.pos()
-            size = roi.size()
-            l = int(pos.x() + self.offset_x)
-            t = int(pos.y() + self.offset_y)
-            r = int(l + size.x())
-            b = int(t + size.y())
-            return [l, t, r, b]
-
-        if "Scan Area" in self.rois:
-            self.data['scan_area'] = get_abs_coords(self.rois["Scan Area"])
-        if 'credit_positions' in self.data:
-            new_creds = []
-            for i in range(len(self.data['credit_positions'])):
-                name = f"Credit {i+1}"
-                if name in self.rois:
-                    new_creds.append(get_abs_coords(self.rois[name]))
-            self.data['credit_positions'] = new_creds
-        if "Kills" in self.rois:
-            self.data['kills'] = get_abs_coords(self.rois["Kills"])
-        self.accept()
-
-    def keyPressEvent(self, event):
-        if event.key() in (QtCore.Qt.Key_Enter, QtCore.Qt.Key_Return):
-            self.save_and_close()
-        else:
-            super().keyPressEvent(event)
 
 class SettingsDialog(QtWidgets.QDialog):
     def __init__(self):
