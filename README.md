@@ -46,7 +46,7 @@ If you have Python installed and want to run the raw scripts/edit the code yours
    *(Or run `python CPM_OOP.py` directly)*
 
 ## Loading your Data into a new Version
-* I am regulary releasing new version. To prevent that you have to complete the entire Setup (bounding box fodler selection ect.) you have the option to load previous configurations via a button in the UI. To get there:
+* I am regulary releasing new versions. To prevent that you have to complete the entire Setup (bounding box fodler selection ect.) you have the option to load previous configurations via a button in the UI. To get there:
 ```text
 First time setup detected...
 Launching Bounding Box Setup...
