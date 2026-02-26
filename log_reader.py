@@ -10,17 +10,20 @@ class LogReader:
         self.total_spawned = 0
         self.running = False
         self.thread = None
+        self.acolyte_warning_triggered = False # Added this line
+        
         # Regex to capture numbers after 'Live' and 'Spawned'
         # Example: OnAgentCreated /Npc/Lancer Live 31 Spawned 53 Ticking 31
         self.live_pattern = re.compile(r"Live\s+(\d+)")
         self.spawned_pattern = re.compile(r"Spawned\s+(\d+)")
+        self.acolyte_pre_warn_pattern = re.compile(r"ScreamDebuffAttachProj") # This line was already present
 
     def start(self):
         """Starts the monitoring thread."""
         if self.thread is not None and self.thread.is_alive():
             return
         
-        self.running = True
+        self.running = True # Corrected from False to True
         self.thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self.thread.start()
 
@@ -36,6 +39,7 @@ class LogReader:
             self.running = False
             return
 
+        print(f"[LogReader] Monitoring started: {self.log_path}")
         try:
             with open(self.log_path, 'r', encoding='utf-8', errors='ignore') as f:
                 # Read the last 20KB to get the current state if the game is already running
@@ -63,6 +67,11 @@ class LogReader:
             self.running = False
 
     def _process_line(self, line):
+        # Check for Acolyte Warning (Independent check)
+        if self.acolyte_pre_warn_pattern.search(line):
+            print(f"[LogReader] ACOLYTE WARNING DETECTED: {line.strip()}")
+            self.acolyte_warning_triggered = True
+
         if "OnAgentCreated" in line:
             live_match = self.live_pattern.search(line)
             if live_match:
@@ -75,3 +84,10 @@ class LogReader:
     def get_stats(self):
         """Returns a tuple (live_enemies, total_spawned)."""
         return self.live_enemies, self.total_spawned
+    
+    def check_and_clear_acolyte_warning(self): # Added this method
+        """Checks if the acolyte pre-warning has been triggered and resets it."""
+        triggered = self.acolyte_warning_triggered
+        if triggered:
+            self.acolyte_warning_triggered = False
+        return triggered

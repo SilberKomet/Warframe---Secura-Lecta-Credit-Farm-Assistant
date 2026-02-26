@@ -9,6 +9,7 @@ A Python-based overlay and tracker for Warframe that monitors Credits Per Minute
 - **Log Tracking:** Optionally reads `EE.log` for 100% accurate kill counts and spawn rates.
 - **FPS Tracker:** Uses PresentMon for accurate FPS analysis.
 - **Live PB comparing** uploading a run that will plot live along your data to see how much better/worse you perform.
+- **Acolyte Warner:** Flashes a visual warning and plays a sound when an Acolyte is about to spawn.
 
 ---
 
@@ -44,6 +45,11 @@ If you have Python installed and want to run the raw scripts/edit the code yours
    ```
    *(Or run `python CPM_OOP.py` directly)*
 
+## Loading your Data into a new Version
+* I am regulary releasing new version. To prevent that you have to complete the entire Setup (bounding box fodler selection ect.) you are able on Script start to load an already existing old version. just select the main folder you unzipped.
+
+
+
 ---
 
 ## Controls
@@ -71,5 +77,6 @@ If you have Python installed and want to run the raw scripts/edit the code yours
 
 ## General Notes and Feature explenation
 * `EE.log` is only read from, no injection is happening. You can uncheck that box and the script will not read the data.
+* The Acolyte Warner also relies on reading `EE.log` to detect the specific pre-spawn log entry.
 * Tracking the FPS requires `PresentMon.exe` to be run as Administrator hence you will be asked to rerun as Administrator.
 * You can load already recorded runs (`master_run_log.csv`) from yourself or others into the tracker, this will add plots when you start so you can compare yourself to another Run (e.g. your own PB). You have the option to either let the PB run plot itself along with your data (recommended for readability and visability) or you can plot the entire PB plot and just have your current run plot live. Either way the `run_plots.png` and `enemy_plots.png` will include both runs across your recorded time window.
