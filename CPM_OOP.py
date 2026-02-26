@@ -87,10 +87,13 @@ class ConfigEditor(QtWidgets.QDialog):
         self.vb.invertY() 
         
         # Convert BGRA/BGR to RGB and Transpose for pyqtgraph (w, h, c)
-        if img_np.shape[2] == 4:
+        if img_np.ndim == 2:
+            img_rgb = cv.cvtColor(img_np, cv.COLOR_GRAY2RGB)
+        elif img_np.shape[2] == 4:
             img_rgb = cv.cvtColor(img_np, cv.COLOR_BGRA2RGB)
         else:
             img_rgb = cv.cvtColor(img_np, cv.COLOR_BGR2RGB)
+            
         img_t = np.transpose(img_rgb, (1, 0, 2))
         
         self.img_item = pg.ImageItem(img_t)
@@ -912,15 +915,23 @@ class SettingsDialog(QtWidgets.QDialog):
             
             self.hide()
             time.sleep(0.2)
-            
-            editor = ConfigEditor(img, data, (monitor['left'], monitor['top']), self)
-            if editor.exec_() == QtWidgets.QDialog.Accepted:
-                with open(config_path, 'w') as f:
-                    json.dump(editor.data, f, indent=4)
-                print("[Config] Configuration updated.")
+
+            try:
+                editor = ConfigEditor(img, data, (monitor['left'], monitor['top']), self)
+                if editor.exec_() == QtWidgets.QDialog.Accepted:
+                    with open(config_path, 'w') as f:
+                        json.dump(editor.data, f, indent=4)
+                    print("[Config] Configuration updated.")
+            except Exception as e:
+                # Catch errors during editor init or execution
+                print(f"[Config] Error inside editor: {e}")
+                QtWidgets.QMessageBox.critical(self, "Editor Crash", f"An error occurred while opening the editor:\n{e}")
+
         except Exception as e:
             print(f"[Config] Error in editor: {e}")
-        self.show()
+            QtWidgets.QMessageBox.critical(self, "Error", f"Failed to initialize editor:\n{e}")
+        finally:
+            self.show()
 
     def run_setup_wizard(self):
         self.hide()

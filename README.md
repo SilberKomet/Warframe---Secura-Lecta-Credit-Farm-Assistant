@@ -46,7 +46,17 @@ If you have Python installed and want to run the raw scripts/edit the code yours
    *(Or run `python CPM_OOP.py` directly)*
 
 ## Loading your Data into a new Version
-* I am regulary releasing new version. To prevent that you have to complete the entire Setup (bounding box fodler selection ect.) you are able on Script start to load an already existing old version. just select the main folder you unzipped.
+* I am regulary releasing new version. To prevent that you have to complete the entire Setup (bounding box fodler selection ect.) you have the option to load previous configurations via a button in the UI. To get there:
+```text
+First time setup detected...
+Launching Bounding Box Setup...
+
+--- Bounding Box Setup ---
+Is this for Solo or Duo setup? [s/d]: s
+Draw Scan Area (Roster) [y/n]: n
+
+Setup complete.
+```
 
 
 
