@@ -76,6 +76,7 @@ Setup complete.
 3. Follow the on-screen instructions to draw boxes around the "Credits" text and the 5 possible credit values in the Mission Progress screen. (You can draw bad bbox's since there is a bbox editor which is more user friendly)
 
 * Example Bounding boxes:
+TEST LALALA
 <img src="Bounding_box_example.png" alt="Bounding Box Example" width="100%" />
 
 ## Requirements
