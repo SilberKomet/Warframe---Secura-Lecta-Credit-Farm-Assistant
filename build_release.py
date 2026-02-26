@@ -1,6 +1,12 @@
 import os
 import shutil
 import sys
+import stat
+
+def remove_readonly(func, path, excinfo):
+    # Clear the readonly bit and reattempt the removal
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
 
 def main():
     # Define paths
@@ -21,7 +27,7 @@ def main():
     # Clean previous build
     if os.path.exists(release_dir):
         print(f"Cleaning previous build at {release_dir}...")
-        shutil.rmtree(release_dir)
+        shutil.rmtree(release_dir, onerror=remove_readonly)
     
     os.makedirs(release_dir)
     print(f"Created release directory: {release_dir}")

@@ -770,6 +770,7 @@ class WarframeTracker(QtCore.QObject):
         self.state_kpm = 0
         self.state_fps = 0
         self.pending_event = ""
+        self.tab_held = False
         
         self.track_logs = self.settings.get('track_logs', False)
         self.track_fps = self.settings.get('track_fps', False)
@@ -997,7 +998,8 @@ class WarframeTracker(QtCore.QObject):
     def setup_hotkeys(self):
         key.add_hotkey('f8', self.start_run)
         # Use on_press_key for TAB to ensure it triggers even if other keys (like WASD) are held
-        key.on_press_key('tab', lambda e: self.tab_action())
+        key.on_press_key('tab', self.on_tab_press)
+        key.on_release_key('tab', self.on_tab_release)
         key.add_hotkey('f9', self.request_overlay_toggle.emit)
         key.add_hotkey('f10', self.request_run_end.emit)
 
@@ -1212,6 +1214,15 @@ class WarframeTracker(QtCore.QObject):
                 h = int(bl[1] - tl[1])
                 return (x, y, w, h)
         return None
+
+    def on_tab_press(self, event):
+        if self.tab_held:
+            return
+        self.tab_held = True
+        self.tab_action()
+
+    def on_tab_release(self, event):
+        self.tab_held = False
 
     def tab_action(self):
         if self.start_time is None:
