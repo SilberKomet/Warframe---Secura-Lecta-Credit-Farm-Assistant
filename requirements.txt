@@ -1,0 +1,10 @@
+opencv-python
+easyocr
+mss
+keyboard
+numpy
+pandas
+pyqtgraph
+PyQt5
+matplotlib
+screeninfo

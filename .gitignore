@@ -1,0 +1,25 @@
+# Python temporary files
+__pycache__/
+*.py[cod]
+
+# User Data & Logs
+OUTPUT/
+*.log
+*.csv
+
+# Configuration Files (User specific)
+# We ignore these so your personal screen setup doesn't overwrite other people's setups
+bbox_config_solo.json
+bbox_config_duo.json
+last_run_settings.json
+path_config.json
+setup_screenshot_*.png
+*.png
+
+# Large Binaries or Environment folders
+python_and_required_packages/
+easyocr_models/
+
+# VS Code / Editor settings
+.vscode/
+.idea/
