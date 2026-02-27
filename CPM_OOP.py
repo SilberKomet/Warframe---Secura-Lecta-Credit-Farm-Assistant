@@ -595,6 +595,12 @@ class SettingsDialog(QtWidgets.QDialog):
         self.check_logs.setToolTip("Reads Warframe's EE.log file in real-time to track enemy spawn/death counts.\nThis provides highly accurate, continuous KPM data.")
         layout.addWidget(self.check_logs)
         
+        # Log KPM Option
+        self.check_log_kpm = QtWidgets.QCheckBox("   └─ Use Log Data for Kills/KPM")
+        self.check_log_kpm.setChecked(True)
+        self.check_log_kpm.setToolTip("If checked, Kills and KPM are calculated from the log file (Real-time).\nIf unchecked, they are read from the Tab menu via OCR (only updates on scan).")
+        layout.addWidget(self.check_log_kpm)
+
         # Acolyte Warner (only available if log tracking is on)
         acolyte_group = QtWidgets.QGroupBox("Acolyte Warner")
         acolyte_layout = QtWidgets.QHBoxLayout()
@@ -701,6 +707,7 @@ class SettingsDialog(QtWidgets.QDialog):
         layout.addWidget(self.log_rate_container)
         
         self.check_logs.toggled.connect(self.update_rate_state)
+        self.check_kills.toggled.connect(self.update_rate_state)
         self.update_rate_state()
 
         # Start Button
@@ -799,8 +806,12 @@ class SettingsDialog(QtWidgets.QDialog):
 
     def update_rate_state(self):
         log_tracking_enabled = self.check_logs.isChecked()
+        kills_enabled = self.check_kills.isChecked()
+        
         self.check_acolyte.setEnabled(log_tracking_enabled)
         self.btn_conf_acolyte.setEnabled(log_tracking_enabled and self.check_acolyte.isChecked())
+        self.check_log_kpm.setEnabled(log_tracking_enabled and kills_enabled)
+        
         enabled = self.check_logs.isChecked() or self.check_fps.isChecked()
         self.log_rate_container.setEnabled(enabled)
 
@@ -988,6 +999,7 @@ class SettingsDialog(QtWidgets.QDialog):
             self.check_sound.setChecked(data.get("use_sound", False))
             self.check_debug.setChecked(data.get("debug_mode", False))
             self.check_logs.setChecked(data.get("track_logs", False))
+            self.check_log_kpm.setChecked(data.get("use_log_kpm", True))
             self.check_fps.setChecked(data.get("track_fps", False))
             self.check_overlay.setChecked(data.get("use_overlay", False))
             self.check_acolyte.setChecked(data.get("acolyte_warner_enabled", False))
@@ -1024,6 +1036,7 @@ class SettingsDialog(QtWidgets.QDialog):
             "use_sound": self.check_sound.isChecked(),
             "debug_mode": self.check_debug.isChecked(),
             "track_logs": self.check_logs.isChecked(),
+            "use_log_kpm": self.check_log_kpm.isChecked(),
             "track_fps": self.check_fps.isChecked(),
             "use_overlay": self.check_overlay.isChecked(),
             "overlay_config": self.overlay_config,
@@ -1079,6 +1092,7 @@ class WarframeTracker(QtCore.QObject):
         self.tab_held = False
         
         self.track_logs = self.settings.get('track_logs', False)
+        self.use_log_kpm = self.settings.get('use_log_kpm', True)
         self.track_fps = self.settings.get('track_fps', False)
         self.log_update_rate = self.settings.get('log_update_rate', 0.1)
         self.acolyte_warner = None
@@ -1729,27 +1743,17 @@ class WarframeTracker(QtCore.QObject):
             im_credits_val = self.screenshot(bbox=tuple(best_box))
             
         im_kills_val = None
-        if self.track_kills and not self.track_logs:
+        if self.track_kills and (not self.track_logs or not self.use_log_kpm):
             bbox_kills = (self.left_kills, self.top_kills, self.right_kills, self.lower_kills)
             im_kills_val = self.screenshot(bbox=bbox_kills)
 
         # --- 4. Process Data (OCR) ---
+        scan_succeeded = False
         cpm_value = 0
         num = 0
-        
         if self.track_credits and im_credits_val is not None:
             # Pass bbox=None to disable retries (since we can't re-screenshot a closed tab)
             num, confidence, time_cp = self.ocr_function(im_credits_val, bbox=None)
-
-            if num == 0:
-                print("[Scan] Failed to read numbers.")
-                if self.use_sound:
-                    winsound.Beep(500, 200) # Low beep for "OCR Failed"
-                if self.debug_mode and self.run_output_path:
-                    filename = f"scan_fail_credits_at_{time_mins:.2f}m.png"
-                    path = os.path.join(self.run_output_path, filename)
-                    cv.imwrite(path, im_credits_val)
-                return
 
             # Safety Check: Credits jump > 1,000,000
             if len(self.creds) > 0:
@@ -1761,28 +1765,28 @@ class WarframeTracker(QtCore.QObject):
                         path = os.path.join(self.run_output_path, filename)
                         cv.imwrite(path, im_credits_val)
 
-            cpm_value = num / time_mins
-            self.creds.append(num)
-            self.confidences.append(confidence)
-            self.cpm.append(cpm_value)
-            
-            # Update State for Master Log
-            self.state_credits = num
-            self.state_cpm = int(cpm_value)
-        
-        # --- 3. Signal Success (BEEP) ---
-        # Moved here so we only beep if OCR actually succeeded
-        if self.use_sound:
-            winsound.Beep(1000, 150)
-
-        self.current_run_time.append(time_mins)
+            if num > 0:
+                scan_succeeded = True
+                cpm_value = num / time_mins
+                self.creds.append(num)
+                self.confidences.append(confidence)
+                self.cpm.append(cpm_value)
+                self.state_credits = num
+                self.state_cpm = int(cpm_value)
+            else:
+                print("[Scan] Failed to read credit numbers.")
+                if self.debug_mode and self.run_output_path:
+                    filename = f"scan_fail_credits_at_{time_mins:.2f}m.png"
+                    path = os.path.join(self.run_output_path, filename)
+                    cv.imwrite(path, im_credits_val)
 
         # --- Kills Logic (OCR) ---
         kills_num = 0
         if self.track_kills:
-            if self.track_logs and self.log_reader:
+            if self.track_logs and self.use_log_kpm and self.log_reader:
                 live, spawned = self.log_reader.get_stats()
                 kills_num = max(0, spawned - live)
+                scan_succeeded = True # Log reading is not an OCR fail state
             elif im_kills_val is not None:
                 kills_num, _, _ = self.ocr_function(im_kills_val, bbox=None)
                 
@@ -1801,17 +1805,35 @@ class WarframeTracker(QtCore.QObject):
                             path = os.path.join(self.run_output_path, filename)
                             cv.imwrite(path, im_kills_val)
             
-            kpm_value = kills_num / time_mins
-            
-            # Only append if we have a valid number (or if we are using logs where 0 is valid)
-            # If using OCR (not logs) and we got 0, it's likely a fail, so don't plot a drop to 0.
-            if self.track_logs or kills_num > 0:
+            if kills_num > 0 and not self.track_logs:
+                scan_succeeded = True
+
+            # Only append and update state if we have a valid number
+            # (or if we are using logs where 0 is a valid state)
+            if (self.track_logs and self.use_log_kpm) or (kills_num > 0):
+                kpm_value = kills_num / time_mins
                 self.kills.append(kills_num)
                 self.kpm.append(kpm_value)
+                if not self.track_logs or not self.use_log_kpm:
+                    self.state_kills = kills_num
+                    self.state_kpm = int(kpm_value)
 
-            if not self.track_logs:
-                self.state_kills = kills_num
-                self.state_kpm = int(kpm_value)
+        # --- 5. Finalize and Signal ---
+        if not scan_succeeded:
+            print("[Scan] OCR failed for all tracked metrics.")
+            if self.use_sound:
+                winsound.Beep(500, 200) # Low beep for total failure
+            return # Exit without appending time or updating plots
+
+        if self.use_sound:
+            winsound.Beep(1000, 150) # High beep for success
+        self.current_run_time.append(time_mins)
+
+        # Update Kills state if using logs (must happen after success check)
+        if self.track_kills and self.track_logs and self.use_log_kpm:
+            kpm_value = (kills_num / time_mins) if time_mins > 0.017 else 0
+            self.state_kills = kills_num
+            self.state_kpm = int(kpm_value)
 
         # Mark Event
         if self.track_logs:
@@ -1828,15 +1850,15 @@ class WarframeTracker(QtCore.QObject):
 
         # --- Console Output ---
         log_msg = f"Scanned - Time: {time_mins:.2f}m"
-        if self.track_credits: log_msg += f" | Credits: {num} (CPM: {int(cpm_value)})"
-        if self.track_kills:   log_msg += f" | Kills: {kills_num} (KPM: {int(kpm_value)})"
+        if self.track_credits and num > 0: log_msg += f" | Credits: {num} (CPM: {int(cpm_value)})"
+        if self.track_kills and ((self.track_logs and self.use_log_kpm) or kills_num > 0): log_msg += f" | Kills: {kills_num} (KPM: {int(kpm_value)})"
         print(log_msg)
         
         # Update Overlays (Tab Data)
         # Must use signal because tab_action runs in a background thread (keyboard hook)
         overlay_data = {}
-        if "CPM" in self.number_overlays: overlay_data["CPM"] = int(cpm_value)
-        if "KPM" in self.number_overlays and not self.track_logs: overlay_data["KPM"] = int(kpm_value)
+        if "CPM" in self.number_overlays and num > 0: overlay_data["CPM"] = int(cpm_value)
+        if "KPM" in self.number_overlays and (not self.track_logs or not self.use_log_kpm) and kills_num > 0: overlay_data["KPM"] = int(kpm_value)
         if "FPS" in self.number_overlays: overlay_data["FPS"] = self.state_fps
         
         if overlay_data:
@@ -1933,7 +1955,7 @@ class WarframeTracker(QtCore.QObject):
         kpm = 0.0
         
         if self.track_kills:
-            if self.track_logs:
+            if self.track_logs and self.use_log_kpm:
                 current_mission_kills = max(0, spawned - live)
                 
                 if self.initial_log_kills is None:
