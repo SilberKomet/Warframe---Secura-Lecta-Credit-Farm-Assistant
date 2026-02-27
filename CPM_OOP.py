@@ -59,10 +59,17 @@ class OverlayWindow(QtWidgets.QWidget):
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
-        pen = QtGui.QPen(QtGui.QColor(255, 0, 0), 2)
-        painter.setPen(pen)
-        for x, y, w, h in self.boxes:
-            painter.drawRect(x, y, w, h)
+        default_pen = QtGui.QPen(QtGui.QColor(255, 0, 0), 2)
+        
+        for box in self.boxes:
+            if len(box) == 5:
+                x, y, w, h, color = box
+                painter.setPen(QtGui.QPen(color, 2))
+                painter.drawRect(x, y, w, h)
+            else:
+                x, y, w, h = box
+                painter.setPen(default_pen)
+                painter.drawRect(x, y, w, h)
 
 class ConfigEditor(QtWidgets.QDialog):
     def __init__(self, img_np, config_data, monitor_offset, parent=None):
@@ -136,6 +143,11 @@ class ConfigEditor(QtWidgets.QDialog):
         if 'credit_positions' in self.data:
             for i, box in enumerate(self.data['credit_positions']):
                 self.add_roi(f"Credit {i+1}", box, 'y')
+        if self.data.get('scan_area_2'):
+            self.add_roi("Scan Area 2", self.data['scan_area_2'], 'c')
+        if self.data.get('credit_positions_2'):
+            for i, box in enumerate(self.data['credit_positions_2']):
+                self.add_roi(f"Credit 2-{i+1}", box, 'm')
         if self.data.get('track_kills') and 'kills' in self.data and self.data['kills']:
              self.add_roi("Kills", self.data['kills'], 'r')
 
@@ -158,6 +170,17 @@ class ConfigEditor(QtWidgets.QDialog):
                 if name in self.rois:
                     new_creds.append(get_abs_coords(self.rois[name]))
             self.data['credit_positions'] = new_creds
+        
+        if "Scan Area 2" in self.rois:
+            self.data['scan_area_2'] = get_abs_coords(self.rois["Scan Area 2"])
+        if 'credit_positions_2' in self.data:
+            new_creds_2 = []
+            for i in range(len(self.data['credit_positions_2'])):
+                name = f"Credit 2-{i+1}"
+                if name in self.rois:
+                    new_creds_2.append(get_abs_coords(self.rois[name]))
+            self.data['credit_positions_2'] = new_creds_2
+
         if "Kills" in self.rois:
             self.data['kills'] = get_abs_coords(self.rois["Kills"])
         self.accept()
@@ -1099,6 +1122,7 @@ class WarframeTracker(QtCore.QObject):
         self.scan_top = self.monitor["top"] + int(self.monitor["height"] * 10 / 100)
         self.scan_right = self.scan_left + int(self.monitor["width"] * 30 / 100)
         self.scan_lower = self.scan_top + int(self.monitor["height"] * 50 / 100)
+        self.credit_positions_2 = []
 
         # Config path setup
         application_path = os.path.dirname(os.path.abspath(__file__))
@@ -1196,6 +1220,7 @@ class WarframeTracker(QtCore.QObject):
             if p_type == 'cpm':
                 self.plot_cpm = p
                 p.setTitle("Credits Per Minute (CPM)", size="16pt")
+                p.setAxisItems({'left': LargeNumberAxisItem(orientation='left')})
                 p.setLabel('left', 'CPM')
                 self.curve_cpm = p.plot(pen='y', symbol='o')
                 self.curve_cpm_pb = p.plot(pen=pg.mkPen('y', style=QtCore.Qt.DotLine))
@@ -1389,18 +1414,28 @@ class WarframeTracker(QtCore.QObject):
         my = self.monitor['top']
         boxes = []
 
-        # Scan Area
+        # Scan Area (Green)
         boxes.append((self.scan_left - mx, self.scan_top - my, 
-                      self.scan_right - self.scan_left, self.scan_lower - self.scan_top))
+                      self.scan_right - self.scan_left, self.scan_lower - self.scan_top, QtGui.QColor('green')))
         
-        # Credit Positions
+        # Credit Positions (Yellow)
         for l, t, r, b in self.credit_positions:
-            boxes.append((l - mx, t - my, r - l, b - t))
+            boxes.append((l - mx, t - my, r - l, b - t, QtGui.QColor('yellow')))
+
+        # Scan Area 2 (Cyan)
+        if hasattr(self, 'scan_left_2') and self.scan_left_2 > 0:
+             boxes.append((self.scan_left_2 - mx, self.scan_top_2 - my, 
+                      self.scan_right_2 - self.scan_left_2, self.scan_lower_2 - self.scan_top_2, QtGui.QColor('cyan')))
+
+        # Credit Positions 2 (Magenta)
+        if hasattr(self, 'credit_positions_2'):
+            for l, t, r, b in self.credit_positions_2:
+                boxes.append((l - mx, t - my, r - l, b - t, QtGui.QColor('magenta')))
             
-        # Kills
+        # Kills (Red)
         if self.track_kills and hasattr(self, 'left_kills'):
             boxes.append((self.left_kills - mx, self.top_kills - my, 
-                          self.right_kills - self.left_kills, self.lower_kills - self.top_kills))
+                          self.right_kills - self.left_kills, self.lower_kills - self.top_kills, QtGui.QColor('red')))
 
         self.overlay = OverlayWindow((mx, my, self.monitor['width'], self.monitor['height']), boxes)
         self.overlay.show()
@@ -1417,6 +1452,13 @@ class WarframeTracker(QtCore.QObject):
             self.scan_top = data['scan_area'][1]
             self.scan_right = data['scan_area'][2]
             self.scan_lower = data['scan_area'][3]
+
+            if data.get('scan_area_2'):
+                self.scan_left_2 = data['scan_area_2'][0]
+                self.scan_top_2 = data['scan_area_2'][1]
+                self.scan_right_2 = data['scan_area_2'][2]
+                self.scan_lower_2 = data['scan_area_2'][3]
+                self.credit_positions_2 = data.get('credit_positions_2', [])
 
             self.credit_positions = data.get('credit_positions', [])
             if len(self.credit_positions) != 5:
@@ -1635,17 +1677,30 @@ class WarframeTracker(QtCore.QObject):
         
         best_box = None
         coords = None
+        active_credit_positions = self.credit_positions
+        current_scan_left = self.scan_left
         
         if self.track_credits:
             coords = self.find_credits_coords(im_scan)
+            
+            # If not found in Area 1, try Area 2 if configured
+            if not coords and hasattr(self, 'scan_left_2') and self.scan_left_2 > 0:
+                 scan_bbox_2 = (self.scan_left_2, self.scan_top_2, self.scan_right_2, self.scan_lower_2)
+                 im_scan_2 = self.screenshot(bbox=scan_bbox_2)
+                 coords = self.find_credits_coords(im_scan_2)
+                 if coords:
+                     active_credit_positions = self.credit_positions_2
+                     current_scan_left = self.scan_left_2
+                     im_scan = im_scan_2 # Use the successful image for debug if needed
+
             if coords:
                 # Calculate alignment to find the correct number box
-                text_abs_x = self.scan_left + coords[0]
+                text_abs_x = current_scan_left + coords[0]
                 text_width = coords[2]
                 text_center_x = text_abs_x + (text_width / 2)
                 
                 min_dist = float('inf')
-                for box in self.credit_positions:
+                for box in active_credit_positions:
                     box_center_x = box[0] + (box[2] - box[0]) / 2
                     dist = abs(text_center_x - box_center_x)
                     if dist < min_dist:
@@ -1658,6 +1713,8 @@ class WarframeTracker(QtCore.QObject):
                 self.last_credits_coords = coords
             else:
                 print("[Scan] Did not find 'Credits' text in scan area.")
+                if self.use_sound:
+                    winsound.Beep(500, 200) # Low beep for "Not Found"
                 if self.debug_mode and self.run_output_path:
                     filename = f"scan_fail_no_credits_text_at_{time_mins:.2f}m.png"
                     path = os.path.join(self.run_output_path, filename)
@@ -1676,11 +1733,6 @@ class WarframeTracker(QtCore.QObject):
             bbox_kills = (self.left_kills, self.top_kills, self.right_kills, self.lower_kills)
             im_kills_val = self.screenshot(bbox=bbox_kills)
 
-        # --- 3. Signal Success (BEEP) ---
-        # Images are secured. User can now close the Tab.
-        if self.use_sound:
-            winsound.Beep(1000, 150) 
-
         # --- 4. Process Data (OCR) ---
         cpm_value = 0
         num = 0
@@ -1691,6 +1743,8 @@ class WarframeTracker(QtCore.QObject):
 
             if num == 0:
                 print("[Scan] Failed to read numbers.")
+                if self.use_sound:
+                    winsound.Beep(500, 200) # Low beep for "OCR Failed"
                 if self.debug_mode and self.run_output_path:
                     filename = f"scan_fail_credits_at_{time_mins:.2f}m.png"
                     path = os.path.join(self.run_output_path, filename)
@@ -1716,6 +1770,11 @@ class WarframeTracker(QtCore.QObject):
             self.state_credits = num
             self.state_cpm = int(cpm_value)
         
+        # --- 3. Signal Success (BEEP) ---
+        # Moved here so we only beep if OCR actually succeeded
+        if self.use_sound:
+            winsound.Beep(1000, 150)
+
         self.current_run_time.append(time_mins)
 
         # --- Kills Logic (OCR) ---
@@ -1743,9 +1802,13 @@ class WarframeTracker(QtCore.QObject):
                             cv.imwrite(path, im_kills_val)
             
             kpm_value = kills_num / time_mins
-            self.kills.append(kills_num)
-            self.kpm.append(kpm_value)
             
+            # Only append if we have a valid number (or if we are using logs where 0 is valid)
+            # If using OCR (not logs) and we got 0, it's likely a fail, so don't plot a drop to 0.
+            if self.track_logs or kills_num > 0:
+                self.kills.append(kills_num)
+                self.kpm.append(kpm_value)
+
             if not self.track_logs:
                 self.state_kills = kills_num
                 self.state_kpm = int(kpm_value)
@@ -1860,7 +1923,10 @@ class WarframeTracker(QtCore.QObject):
                 acolyte_cfg = self.settings.get("acolyte_config", {})
                 if acolyte_cfg.get("audio_cue", True):
                     # Use a distinct sound for the acolyte
-                    winsound.Beep(1500, 500)
+                    # 3 High Beeps
+                    for _ in range(3):
+                        winsound.Beep(1500, 100)
+                        time.sleep(0.05)
                 self.acolyte_warner.start_warning(name, duration)
 
         kills = 0

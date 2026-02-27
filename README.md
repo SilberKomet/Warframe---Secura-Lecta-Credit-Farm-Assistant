@@ -45,8 +45,8 @@ If you have Python installed and want to run the raw scripts/edit the code yours
    ```
    *(Or run `python CPM_OOP.py` directly)*
 
-## Loading your Data into a new Version
-* I am regulary releasing new versions. To prevent that you have to complete the entire Setup (bounding box fodler selection ect.) you have the option to load previous configurations via a button in the UI. To get there:
+## Loading your Configurations into a new Version
+* I am regulary releasing new versions. To prevent that you have to complete the entire Setup (bounding box, folder selection, ect.) you have the option to load previous configurations via a button in the UI. To get there:
 ```text
 First time setup detected...
 Launching Bounding Box Setup...
@@ -57,7 +57,8 @@ Draw Scan Area (Roster) [y/n]: n
 
 Setup complete.
 ```
-* Alternatively you can copy all `.json`, `.png` from the old release under `python_and_required_packages\\LECTA_SCRIPTS` and insert them in the new release (same path)
+* Alternatively you can copy all `.json`, `.png` from the old release under `python_and_required_packages\\LECTA_SCRIPTS` and insert them in the new release (same path).
+* I will provide `bbox_config_solo.json` and `bbox_config_duo.json` to the Source if new users want to simply load in configs and drag boxes arround instead of following the Setup Guide. The boxes in the Editor are labeled `Scan Area 1/2` and `Credits 1 4` or `Credits 2 1` indicating where each box belongs.
 
 
 
@@ -77,7 +78,7 @@ Setup complete.
 3. Follow the on-screen instructions to draw boxes around the "Credits" text and the 5 possible credit values in the Mission Progress screen. (You can draw bad bbox's since there is a bbox editor which is more user friendly)
 
 * Example Bounding boxes:
-<img src="Bounding_box_example.png" alt="Bounding Box Example" width="100%" />
+<img src="Bbox_example.png" alt="Bounding Box Example" width="100%" />
 
 ## Requirements
 - Warframe must be running on the **Primary Monitor**.

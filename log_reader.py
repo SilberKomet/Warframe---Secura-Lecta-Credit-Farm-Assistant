@@ -21,6 +21,7 @@ class LogReader:
         self.thread = None
         self.triggered_acolytes = [] # Changed from bool to list
         self.lock = threading.Lock() # For thread-safe list access
+        self.last_acolyte_warning_time = 0
         
         # Regex to capture numbers after 'Live' and 'Spawned'
         # Example: OnAgentCreated /Npc/Lancer Live 31 Spawned 53 Ticking 31
@@ -83,6 +84,11 @@ class LogReader:
         if taunt_match:
             tag = taunt_match.group("tag")
             if tag in ACOLYTE_MAP:
+                now = time.time()
+                if now - self.last_acolyte_warning_time < 180: # 3 minute cooldown
+                    return
+                self.last_acolyte_warning_time = now
+                
                 acolyte = ACOLYTE_MAP[tag]
                 print(f"[LogReader] ACOLYTE WARNING DETECTED: {acolyte['name']}")
                 with self.lock:
@@ -90,6 +96,10 @@ class LogReader:
                 return # Don't process other things on this line
 
         if self.acolyte_scream_pattern.search(line):
+            now = time.time()
+            if now - self.last_acolyte_warning_time < 180:
+                return
+            self.last_acolyte_warning_time = now
             print(f"[LogReader] ACOLYTE WARNING DETECTED: {SCREAM_ACOLYTE_NAME} (Scream)")
             with self.lock:
                 self.triggered_acolytes.append((SCREAM_ACOLYTE_NAME, SCREAM_DURATION))
