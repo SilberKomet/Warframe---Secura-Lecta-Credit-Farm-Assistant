@@ -57,6 +57,7 @@ Draw Scan Area (Roster) [y/n]: n
 
 Setup complete.
 ```
+* Alternatively you can copy all `.json`, `.png` from the old release under `python_and_required_packages\\LECTA_SCRIPTS` and insert them in the new release (same path)
 
 
 
