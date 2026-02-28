@@ -44,9 +44,9 @@ This text file records the internal events of the tracker.
 *Only created if **DEBUG MODE** is enabled in Settings.*
 
 ### Failed Scan Images
-If a scan fails, the tracker saves the image it tried to read so you can adjust your bounding boxes.
+If a scan fails, the tracker saves the image it tried to read so you can adjust your bounding boxes or analyze the error.
 *   **`NO_CREDITS_TEXT_AT_...png`**: The tracker could not find the word "Credits" in the Scan Area.
 *   **`OCR_CREDITS_FAIL_AT_...png`**: The tracker found "Credits" but could not read the number.
 
 ### EE.log Recording
-*   **`ee_recording.log`**: A safe copy of Warframe's `EE.log` covering **only** the duration of your run.
+*   **`ee_recording.log`**: A safe copy of Warframe's `EE.log` covering **only** the duration of your run. (F8 press till F10 press)
