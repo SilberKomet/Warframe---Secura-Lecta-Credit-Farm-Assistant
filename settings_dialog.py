@@ -12,6 +12,80 @@ from pyqtgraph.Qt import QtWidgets, QtCore, QtGui
 from gui_components import AcolyteConfigDialog, EffigyConfigDialog, OverlayConfigDialog
 from bounding_box_setup import ConfigEditor
 
+class ProfileManagerDialog(QtWidgets.QDialog):
+    def __init__(self, current_settings, profiles_file, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Profile Manager")
+        self.resize(400, 300)
+        self.current_settings = current_settings
+        self.profiles_file = profiles_file
+        self.profiles = {}
+        self.load_profiles()
+
+        # Different Theme (Dark Blue/Purple background to distinguish)
+        palette = self.palette()
+        palette.setColor(QtGui.QPalette.Window, QtGui.QColor(40, 40, 80))
+        palette.setColor(QtGui.QPalette.WindowText, QtGui.QColor(220, 220, 255))
+        palette.setColor(QtGui.QPalette.Base, QtGui.QColor(20, 20, 50))
+        palette.setColor(QtGui.QPalette.Text, QtGui.QColor(220, 220, 255))
+        palette.setColor(QtGui.QPalette.Button, QtGui.QColor(60, 60, 100))
+        palette.setColor(QtGui.QPalette.ButtonText, QtGui.QColor(220, 220, 255))
+        self.setPalette(palette)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        
+        layout.addWidget(QtWidgets.QLabel("<b>Manage Settings Profiles</b>"))
+        
+        self.list_profiles = QtWidgets.QListWidget()
+        self.list_profiles.addItems(sorted(self.profiles.keys()))
+        layout.addWidget(self.list_profiles)
+
+        btn_layout = QtWidgets.QVBoxLayout()
+        
+        self.btn_create = QtWidgets.QPushButton("Save Current UI Settings as New Profile")
+        self.btn_create.clicked.connect(self.create_profile)
+        btn_layout.addWidget(self.btn_create)
+
+        self.btn_delete = QtWidgets.QPushButton("Delete Selected Profile")
+        self.btn_delete.clicked.connect(self.delete_profile)
+        btn_layout.addWidget(self.btn_delete)
+
+        layout.addLayout(btn_layout)
+        
+        self.btn_close = QtWidgets.QPushButton("Close")
+        self.btn_close.clicked.connect(self.accept)
+        layout.addWidget(self.btn_close)
+
+    def load_profiles(self):
+        if os.path.exists(self.profiles_file):
+            try:
+                with open(self.profiles_file, 'r') as f:
+                    self.profiles = json.load(f)
+            except: self.profiles = {}
+
+    def save_profiles(self):
+        with open(self.profiles_file, 'w') as f:
+            json.dump(self.profiles, f, indent=4)
+
+    def create_profile(self):
+        name, ok = QtWidgets.QInputDialog.getText(self, "New Profile", "Enter Profile Name:")
+        if ok and name:
+            if name in self.profiles:
+                QtWidgets.QMessageBox.warning(self, "Error", "Profile already exists. Delete it first or choose a different name.")
+                return
+            self.profiles[name] = self.current_settings
+            self.save_profiles()
+            self.list_profiles.addItem(name)
+            self.list_profiles.sortItems()
+
+    def delete_profile(self):
+        item = self.list_profiles.currentItem()
+        if item:
+            name = item.text()
+            del self.profiles[name]
+            self.save_profiles()
+            self.list_profiles.takeItem(self.list_profiles.row(item))
+
 class SettingsDialog(QtWidgets.QDialog):
     def __init__(self):
         super().__init__()
@@ -21,6 +95,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         self.settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_run_settings.json")
         self.path_config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "path_config.json")
+        self.profiles_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles.json")
 
         # --- Output Path Setup ---
         self.output_path = os.path.join(os.getcwd(), "OUTPUT")
@@ -60,6 +135,22 @@ class SettingsDialog(QtWidgets.QDialog):
             "color": "#0000FF",
             "opacity": 50
         }
+
+        # --- Profile Selection UI ---
+        profile_group = QtWidgets.QGroupBox("Settings Profiles")
+        profile_layout = QtWidgets.QHBoxLayout()
+        
+        self.combo_profiles = QtWidgets.QComboBox()
+        self.load_profiles_to_combo()
+        self.combo_profiles.currentIndexChanged.connect(self.on_profile_changed)
+        profile_layout.addWidget(self.combo_profiles)
+        
+        self.btn_manage_profiles = QtWidgets.QPushButton("Manage Profiles")
+        self.btn_manage_profiles.clicked.connect(self.open_profile_manager)
+        profile_layout.addWidget(self.btn_manage_profiles)
+        
+        profile_group.setLayout(profile_layout)
+        layout.addWidget(profile_group)
 
         # Output Path UI
         path_layout = QtWidgets.QHBoxLayout()
@@ -299,6 +390,36 @@ class SettingsDialog(QtWidgets.QDialog):
         layout.addWidget(self.btn_import)
 
         self.setLayout(layout)
+
+    def load_profiles_to_combo(self):
+        self.combo_profiles.blockSignals(True)
+        self.combo_profiles.clear()
+        self.combo_profiles.addItem("Select a Profile...")
+        if os.path.exists(self.profiles_file):
+            try:
+                with open(self.profiles_file, 'r') as f:
+                    profiles = json.load(f)
+                    self.combo_profiles.addItems(sorted(profiles.keys()))
+            except: pass
+        self.combo_profiles.blockSignals(False)
+
+    def open_profile_manager(self):
+        current = self.get_settings()
+        dlg = ProfileManagerDialog(current, self.profiles_file, self)
+        dlg.exec_()
+        self.load_profiles_to_combo()
+
+    def on_profile_changed(self):
+        name = self.combo_profiles.currentText()
+        if name == "Select a Profile...": return
+        if os.path.exists(self.profiles_file):
+            try:
+                with open(self.profiles_file, 'r') as f:
+                    profiles = json.load(f)
+                    if name in profiles:
+                        self.apply_settings(profiles[name])
+            except Exception as e:
+                print(f"Error loading profile: {e}")
 
     def open_acolyte_config(self):
         dlg = AcolyteConfigDialog(self.acolyte_config, self)
@@ -562,47 +683,50 @@ class SettingsDialog(QtWidgets.QDialog):
             with open(self.settings_file, 'r') as f:
                 data = json.load(f)
             
-            if data.get("mode") == "Solo":
-                self.radio_solo.setChecked(True)
-            else:
-                self.radio_duo.setChecked(True)
-                
-            self.spin_delay.setValue(data.get("scan_delay", 0.3))
-            self.spin_cooldown.setValue(data.get("cooldown", 3.0))
-            self.check_credits.setChecked(data.get("track_credits", True))
-            self.check_kills.setChecked(data.get("track_kills", False))
-            self.check_effigy.setChecked(data.get("effigy_warner_enabled", False))
-            self.check_on_top.setChecked(data.get("always_on_top", True))
-            self.check_sound.setChecked(data.get("use_sound", False))
-            self.check_debug.setChecked(data.get("debug_mode", False))
-            self.check_logs.setChecked(data.get("track_logs", False))
-            self.check_log_kpm.setChecked(data.get("use_log_kpm", True))
-            self.check_fps.setChecked(data.get("track_fps", False))
-            self.check_overlay.setChecked(data.get("use_overlay", False))
-            self.check_acolyte.setChecked(data.get("acolyte_warner_enabled", False))
-            if "acolyte_config" in data:
-                self.acolyte_config = data["acolyte_config"]
-            if "effigy_config" in data:
-                self.effigy_config = data["effigy_config"]
-
-            if "overlay_config" in data:
-                self.overlay_config = data["overlay_config"]
-            self.line_pb.setText(data.get("pb_file", ""))
-            self.check_pb_live.setChecked(data.get("show_pb_live", True))
-            
-            saved_rec_rate = data.get("data_recording_rate", 100)
-            for i in range(self.combo_rec_rate.count()):
-                if self.combo_rec_rate.itemData(i) == saved_rec_rate:
-                    self.combo_rec_rate.setCurrentIndex(i)
-                    break
-            
-            saved_rate = data.get("log_update_rate", 0.1)
-            for i in range(self.combo_log_rate.count()):
-                if QtCore.qFuzzyCompare(self.combo_log_rate.itemData(i), saved_rate):
-                    self.combo_log_rate.setCurrentIndex(i)
-                    break
+            self.apply_settings(data)
         except Exception as e:
             print(f"[Settings] Error loading settings: {e}")
+
+    def apply_settings(self, data):
+        if data.get("mode") == "Solo":
+            self.radio_solo.setChecked(True)
+        else:
+            self.radio_duo.setChecked(True)
+            
+        self.spin_delay.setValue(data.get("scan_delay", 0.3))
+        self.spin_cooldown.setValue(data.get("cooldown", 3.0))
+        self.check_credits.setChecked(data.get("track_credits", True))
+        self.check_kills.setChecked(data.get("track_kills", False))
+        self.check_effigy.setChecked(data.get("effigy_warner_enabled", False))
+        self.check_on_top.setChecked(data.get("always_on_top", True))
+        self.check_sound.setChecked(data.get("use_sound", False))
+        self.check_debug.setChecked(data.get("debug_mode", False))
+        self.check_logs.setChecked(data.get("track_logs", False))
+        self.check_log_kpm.setChecked(data.get("use_log_kpm", True))
+        self.check_fps.setChecked(data.get("track_fps", False))
+        self.check_overlay.setChecked(data.get("use_overlay", False))
+        self.check_acolyte.setChecked(data.get("acolyte_warner_enabled", False))
+        if "acolyte_config" in data:
+            self.acolyte_config = data["acolyte_config"]
+        if "effigy_config" in data:
+            self.effigy_config = data["effigy_config"]
+
+        if "overlay_config" in data:
+            self.overlay_config = data["overlay_config"]
+        self.line_pb.setText(data.get("pb_file", ""))
+        self.check_pb_live.setChecked(data.get("show_pb_live", True))
+        
+        saved_rec_rate = data.get("data_recording_rate", 100)
+        for i in range(self.combo_rec_rate.count()):
+            if self.combo_rec_rate.itemData(i) == saved_rec_rate:
+                self.combo_rec_rate.setCurrentIndex(i)
+                break
+        
+        saved_rate = data.get("log_update_rate", 0.1)
+        for i in range(self.combo_log_rate.count()):
+            if QtCore.qFuzzyCompare(self.combo_log_rate.itemData(i), saved_rate):
+                self.combo_log_rate.setCurrentIndex(i)
+                break
 
     def get_settings(self):
         return {
