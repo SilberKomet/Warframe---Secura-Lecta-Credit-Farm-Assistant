@@ -59,6 +59,9 @@ def main():
         "bounding_box_setup.py", 
         "fps_tracker.py", 
         "log_reader.py",
+        "gui_components.py",
+        "settings_dialog.py",
+        "tracker.py",
         "PresentMon.exe",
         "requirements.txt"
     ]

@@ -7,6 +7,7 @@ import subprocess
 import time
 import cv2 as cv
 import mss
+import urllib.request
 from screeninfo import get_monitors
 from pyqtgraph.Qt import QtWidgets, QtCore, QtGui
 from gui_components import AcolyteConfigDialog, EffigyConfigDialog, OverlayConfigDialog, SoundConfigDialog
@@ -86,11 +87,34 @@ class ProfileManagerDialog(QtWidgets.QDialog):
             self.save_profiles()
             self.list_profiles.takeItem(self.list_profiles.row(item))
 
+class UpdateChecker(QtCore.QThread):
+    sig_update_found = QtCore.pyqtSignal(str, str) # version, title
+
+    def __init__(self, current_version):
+        super().__init__()
+        self.current_version = current_version
+
+    def run(self):
+        url = "https://api.github.com/repos/SilberKomet/Warframe---Secura-Lecta-Credit-Farm-Assistant/releases/latest"
+        try:
+            # User-Agent is required by GitHub API
+            req = urllib.request.Request(url, headers={'User-Agent': 'Warframe-Lecta-Tracker'})
+            with urllib.request.urlopen(req) as response:
+                data = json.loads(response.read().decode())
+                latest_tag = data.get("tag_name", "")
+                name = data.get("name", "")
+                
+                if latest_tag and latest_tag != self.current_version:
+                    self.sig_update_found.emit(latest_tag, name)
+        except Exception:
+            pass # Fail silently if no internet or API error
+
 class SettingsDialog(QtWidgets.QDialog):
-    def __init__(self):
+    def __init__(self, version="Unknown"):
         super().__init__()
         self.setWindowTitle("Tracker Settings")
         self.resize(300, 300)
+        self.version = version
         layout = QtWidgets.QVBoxLayout()
 
         self.settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_run_settings.json")
@@ -402,6 +426,17 @@ class SettingsDialog(QtWidgets.QDialog):
         layout.addWidget(self.btn_import)
 
         self.setLayout(layout)
+        
+        # Start Update Check
+        self.update_checker = UpdateChecker(self.version)
+        self.update_checker.sig_update_found.connect(self.show_update_popup)
+        self.update_checker.start()
+
+    def show_update_popup(self, tag, title):
+        QtWidgets.QMessageBox.information(self, "Update Available", 
+                                          f"A new version <b>{tag}</b> is available!<br>"
+                                          f"Title: {title}<br><br>"
+                                          "Please check the GitHub Releases page.")
 
     def load_profiles_to_combo(self):
         self.combo_profiles.blockSignals(True)

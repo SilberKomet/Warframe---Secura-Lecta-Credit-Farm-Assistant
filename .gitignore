@@ -9,10 +9,7 @@ OUTPUT/
 
 # Configuration Files (User specific)
 # We ignore these so your personal screen setup doesn't overwrite other people's setups
-bbox_config_solo.json
-bbox_config_duo.json
-last_run_settings.json
-path_config.json
+*.json
 setup_screenshot_*.png
 *.png
 
@@ -22,6 +19,7 @@ easyocr_models/
 
 # Ignore the patch generator script
 Branch_tests.py
+CPM_OOP.py
 
 # Ignore generated patch folders
 Branch_Patch_*
