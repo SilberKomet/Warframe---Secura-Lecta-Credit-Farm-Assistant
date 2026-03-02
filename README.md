@@ -7,6 +7,7 @@ A Python-based overlay and tracker for Warframe that monitors Credits Per Minute
 This project is strictly a Quality of Life (QoL) and analytics tool.
 
 * **No Code Interference**: It does not modify, inject into, or interfere with Warframe's memory or internal code in any way. (EE.log is strictly read-only).
+  - _You can turn of Log reading and still have ca. 75% of the features._
 * **No Automation**: This tool does not use any macros, automated keystrokes, or botting to play the game or complete tasks for you.
 * **No Unfair Advantage**: It simply uses standard OCR (Optical Character Recognition) to read the screen and parses local log files to plot statistics, allowing players to analyze and improve their own performance.
 

@@ -24,6 +24,9 @@ class LogReader:
         self.general_events = [] # Queue for other events (Death, etc.)
         self.lock = threading.Lock() # For thread-safe list access
         self.last_acolyte_warning_time = 0
+        self.current_offset = 0
+        self.last_engine_time = 0.0
+        self.timestamp_pattern = re.compile(r"^(\d+\.\d+)")
         
         # Regex to capture numbers after 'Live' and 'Spawned'
         # Example: OnAgentCreated /Npc/Lancer Live 31 Spawned 53 Ticking 31
@@ -65,9 +68,10 @@ class LogReader:
                 
                 while self.running:
                     current_pos = f.tell()
+                    self.current_offset = current_pos
                     line = f.readline()
                     if not line:
-                        time.sleep(0.05)
+                        time.sleep(0.01)
                         continue
                     
                     # Ensure we have a complete line (ends with newline)
@@ -83,6 +87,14 @@ class LogReader:
             self.running = False
 
     def _process_line(self, line):
+        # Extract Engine Timestamp
+        ts_match = self.timestamp_pattern.match(line)
+        if ts_match:
+            try:
+                self.last_engine_time = float(ts_match.group(1))
+            except ValueError:
+                pass
+
         # Acolyte Checks first
         taunt_match = self.acolyte_taunt_pattern.search(line)
         if taunt_match:

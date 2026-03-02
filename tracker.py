@@ -51,6 +51,7 @@ class WarframeTracker(QtCore.QObject):
             QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
             QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
             self.app = QtWidgets.QApplication([])
+        self.app.setQuitOnLastWindowClosed(False) # Prevent app exit when recreating window
 
         self.cooldown_duration = self.settings['cooldown']
         self.run_output_path = None
@@ -142,14 +143,24 @@ class WarframeTracker(QtCore.QObject):
         current_time = time.perf_counter()
         app_time = current_time - self.app_start_time
         
-        ee_str = ""
         run_time_str = ""
+        offset_str = ""
+        game_time_str = ""
         if hasattr(self, 'start_time') and self.start_time is not None:
             elapsed = current_time - self.start_time
-            ee_str = f" [EE: {elapsed:.3f}]"
             run_time_str = f" [T+{elapsed:.3f}s]"
 
-        log_line = f"[{app_time:.3f}s]{ee_str}{run_time_str} {message}"
+        if self.track_logs and self.log_reader and self.ee_log_start_offset is not None:
+            curr = self.log_reader.current_offset
+            if curr >= self.ee_log_start_offset:
+                rel = curr - self.ee_log_start_offset
+                offset_str = f" [LogOff: {rel}]"
+            
+            # Add Game Engine Timestamp if available
+            if hasattr(self.log_reader, 'last_engine_time') and self.log_reader.last_engine_time > 0:
+                game_time_str = f" [Game: {self.log_reader.last_engine_time:.3f}]"
+
+        log_line = f"[{app_time:.3f}s]{game_time_str}{run_time_str}{offset_str} {message}"
         
         if self.log_file:
             try:
@@ -842,17 +853,24 @@ class WarframeTracker(QtCore.QObject):
             
             self.log(f"[Run] Started! Output: {self.run_output_path}", important=True)
             self.log(f"[Run] Debug Mode: {self.debug_mode}")
-            self.log("[Info] [AppTime] (first square brackets) is relative to program start, not F8 press. [EE] is the calculated timestep in the sliced log (Run Time).")
+            self.log("[Info] [AppTime] (first square brackets) is relative to program start. [T+...] is run time.")
             
             # --- Verbose Start Info for Players ---
             self.log("-" * 40)
             self.log(f"CONFIGURATION: {self.settings['mode']} Mode")
+            self.log(f"System: {sys.platform} | Python: {sys.version.split()[0]}")
             self.log(f"Monitor Resolution: {self.monitor['width']}x{self.monitor['height']}")
+            self.log(f"Config Path: {self.config_path}")
             self.log(f"Active Features: Credits={self.track_credits}, Kills={self.track_kills}, Logs={self.track_logs}, FPS={self.track_fps}")
+            
+            self.log(f"Scan Delay: {self.scan_delay}s | Cooldown: {self.cooldown_duration}s")
+            self.log(f"Sound: {self.use_sound} | Overlay: {self.use_overlay} | Always on Top: {self.always_on_top}")
+            self.log(f"Data Recording Rate: {self.data_recording_interval_ms}ms | Plot Update Rate: {self.log_update_rate}s")
             
             if self.track_credits:
                 cpm_mode_str = f"Rolling ({self.cpm_window}s)" if self.cpm_rolling else "Cumulative"
                 self.log(f"CPM Mode: {cpm_mode_str}")
+                self.log(f"Show High CPM Line: {self.show_high_cpm}")
             
             if self.track_kills:
                 tab_kpm_mode_str = f"Rolling ({self.tab_kpm_window}s)" if self.tab_kpm_rolling else "Cumulative"
@@ -864,6 +882,8 @@ class WarframeTracker(QtCore.QObject):
                      self.log(f"Effigy Monitor: ON (Threshold: {self.effigy_threshold}). Warning triggers if allies < {self.effigy_threshold}.")
                  kpm_mode_str = f"Rolling ({self.log_kpm_window}s)" if self.log_kpm_rolling else "Cumulative"
                  self.log(f"Log KPM Mode: {kpm_mode_str}")
+                 self.log(f"Add Log KPM Plot: {self.add_log_kpm_plot}")
+                 self.log(f"Acolyte Warner: {self.settings.get('acolyte_warner_enabled', False)}")
             self.log("-" * 40)
         except Exception as e:
             print(f"[CRITICAL] Could not create output folder. Error: {e}")
@@ -1073,6 +1093,16 @@ class WarframeTracker(QtCore.QObject):
                         path = os.path.join(self.debug_dir, filename)
                         cv.imwrite(path, im_credits_val)
                         self.log(f"Saved debug image: {filename}")
+                
+                # Safety Check: Credits decreased (Negative CPM prevention)
+                if num < self.creds[-1] and num > 0:
+                    self.log(f"[Scan] Warning: Credits decreased (Prev: {self.creds[-1]}, New: {num}). Ignoring.", important=True)
+                    if self.debug_mode and self.debug_dir:
+                        filename = f"CREDIT_DECREASE_WARNING_AT_{time_mins:.2f}m.png"
+                        path = os.path.join(self.debug_dir, filename)
+                        cv.imwrite(path, im_credits_val)
+                        self.log(f"Saved debug image: {filename}")
+                    num = 0
 
             if num > 0:
                 scan_succeeded = True

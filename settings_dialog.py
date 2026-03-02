@@ -104,8 +104,18 @@ class UpdateChecker(QtCore.QThread):
                 latest_tag = data.get("tag_name", "")
                 name = data.get("name", "")
                 
-                if latest_tag and latest_tag != self.current_version:
-                    self.sig_update_found.emit(latest_tag, name)
+                if latest_tag:
+                    # Helper to parse version string into a comparable tuple
+                    def version_tuple(v):
+                        try:
+                            # Handles x.y.z vs x.y correctly (e.g. 2.0 > 1.6.9)
+                            return tuple(int(x) for x in v.lower().lstrip('v').split('.') if x.isdigit())
+                        except:
+                            return (0,)
+
+                    if version_tuple(latest_tag) > version_tuple(self.current_version):
+                        self.sig_update_found.emit(latest_tag, name)
+
         except Exception:
             pass # Fail silently if no internet or API error
 
@@ -198,7 +208,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         # Previous Settings Checkbox
         self.check_load_prev = QtWidgets.QCheckBox("Load Last Used Settings")
-        self.check_load_prev.setToolTip("If checked, restores all settings from the last time you started the tracker.")
+        self.check_load_prev.setToolTip("If checked, automatically loads all settings from the previous run when this dialog opens.")
         self.check_load_prev.toggled.connect(self.load_previous_settings)
         layout.addWidget(self.check_load_prev)
         
@@ -229,7 +239,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self.spin_delay.setRange(0.1, 2.0)
         self.spin_delay.setSingleStep(0.1)
         self.spin_delay.setValue(0.3)
-        self.spin_delay.setToolTip("How long to wait (in seconds) after you press TAB before taking a screenshot.\nIncrease if the UI takes longer to fade in.")
+        self.spin_delay.setToolTip("How long to wait (in seconds) after you press TAB before taking a screenshot.<br>Increase if the UI takes longer to fade in.")
         layout.addWidget(self.spin_delay)
 
         # Cooldown
@@ -238,7 +248,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self.spin_cooldown.setRange(0.5, 10.0)
         self.spin_cooldown.setSingleStep(0.5)
         self.spin_cooldown.setValue(3.0)
-        self.spin_cooldown.setToolTip("The minimum time (in seconds) required between two consecutive TAB scans.\nPrevents accidental double-scanning.")
+        self.spin_cooldown.setToolTip("The minimum time (in seconds) required between two consecutive TAB scans.<br>Prevents accidental double-scanning.")
         layout.addWidget(self.spin_cooldown)
 
         # Toggles
@@ -262,7 +272,7 @@ class SettingsDialog(QtWidgets.QDialog):
         cpm_calc_layout.addWidget(QtWidgets.QLabel("CPM Mode:"))
         self.combo_cpm_mode = QtWidgets.QComboBox()
         self.combo_cpm_mode.addItems(["Cumulative Average", "Rolling Average"])
-        self.combo_cpm_mode.setToolTip("Cumulative: Average over entire run.\nRolling: Average over the last X seconds.")
+        self.combo_cpm_mode.setToolTip("<b>Cumulative:</b> Average CPM over the entire run duration.<br><b>Rolling:</b> Average CPM over the last X seconds (more responsive to recent farming).")
         self.combo_cpm_mode.currentIndexChanged.connect(self.update_rate_state)
         cpm_calc_layout.addWidget(self.combo_cpm_mode)
         
@@ -275,7 +285,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         self.check_kills = QtWidgets.QCheckBox("Track Kills (Snapshot on Tab)")
         self.check_kills.setChecked(False)
-        self.check_kills.setToolTip("Enables tracking of Kills and Kills Per Minute (KPM) updated on Tab press.\nIf 'Track Log Data' is also checked, this uses log data for the snapshot instead of OCR.")
+        self.check_kills.setToolTip("Enables tracking of Kills and KPM based on a snapshot taken when you press TAB.<br>If 'Track Log Data' is also enabled, the kill count is taken from the log at that moment instead of using OCR.")
         layout.addWidget(self.check_kills)
 
         # Extras
@@ -289,7 +299,7 @@ class SettingsDialog(QtWidgets.QDialog):
         tab_kpm_calc_layout.addWidget(QtWidgets.QLabel("Tab KPM Mode:"))
         self.combo_tab_kpm_mode = QtWidgets.QComboBox()
         self.combo_tab_kpm_mode.addItems(["Cumulative Average", "Rolling Average"])
-        self.combo_tab_kpm_mode.setToolTip("Cumulative: Average over entire run.\nRolling: Average over the last X seconds.")
+        self.combo_tab_kpm_mode.setToolTip("<b>Cumulative:</b> Average KPM over the entire run duration.<br><b>Rolling:</b> Average KPM over the last X seconds (more responsive).")
         self.combo_tab_kpm_mode.currentIndexChanged.connect(self.update_rate_state)
         tab_kpm_calc_layout.addWidget(self.combo_tab_kpm_mode)
         
@@ -303,12 +313,12 @@ class SettingsDialog(QtWidgets.QDialog):
         self.check_logs = QtWidgets.QCheckBox("Track Log Data -- WARNING: This reads your EE.log file")
         self.check_logs.setStyleSheet("color: red; font-weight: bold;")
         self.check_logs.setChecked(False)
-        self.check_logs.setToolTip("Reads Warframe's EE.log file in real-time to track enemy spawn/death counts.\nThis provides highly accurate, continuous KPM data.")
+        self.check_logs.setToolTip("Reads Warframe's EE.log file in real-time to track enemy spawns, deaths, and other game events.<br>This provides highly accurate, continuous data for KPM, ally counts (for Effigy), and Acolyte spawns.<br><b>NOTE:</b> This requires the game to be in English.<br><b>Required for DEBUG MODE.</b>")
         layout.addWidget(self.check_logs)
         
         # Add Log KPM Plot Option
         self.check_add_log_kpm = QtWidgets.QCheckBox("   └─ Plot KPM (Continuous from Log)")
-        self.check_add_log_kpm.setToolTip("Adds an additional plot showing KPM derived from logs.\nUseful for comparing Snapshot KPM vs Continuous Log KPM.")
+        self.check_add_log_kpm.setToolTip("Adds a separate plot showing the continuous KPM calculated from the log file.<br>This is useful for comparing against the snapshot-based KPM.")
         layout.addWidget(self.check_add_log_kpm)
 
         # Log KPM Calculation Mode
@@ -319,7 +329,7 @@ class SettingsDialog(QtWidgets.QDialog):
         kpm_calc_layout.addWidget(QtWidgets.QLabel("Log KPM Mode:"))
         self.combo_kpm_mode = QtWidgets.QComboBox()
         self.combo_kpm_mode.addItems(["Cumulative Average", "Rolling Average"])
-        self.combo_kpm_mode.setToolTip("Cumulative: Average over entire run.\nRolling: Average over the last X seconds (more responsive).")
+        self.combo_kpm_mode.setToolTip("<b>Cumulative:</b> Average KPM over the entire run duration.<br><b>Rolling:</b> Average KPM over the last X seconds (more responsive to recent activity).")
         self.combo_kpm_mode.currentIndexChanged.connect(self.update_rate_state)
         kpm_calc_layout.addWidget(self.combo_kpm_mode)
         
@@ -327,7 +337,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self.spin_kpm_window.setRange(10, 600)
         self.spin_kpm_window.setValue(60)
         self.spin_kpm_window.setSuffix(" s")
-        self.spin_kpm_window.setToolTip("Window size for Rolling Average.")
+        self.spin_kpm_window.setToolTip("The time window in seconds for the 'Rolling Average' KPM calculation.")
         kpm_calc_layout.addWidget(self.spin_kpm_window)
         
         layout.addWidget(kpm_calc_group)
@@ -336,7 +346,7 @@ class SettingsDialog(QtWidgets.QDialog):
         acolyte_group = QtWidgets.QGroupBox("Acolyte Warner")
         acolyte_layout = QtWidgets.QHBoxLayout()
         self.check_acolyte = QtWidgets.QCheckBox("Enable")
-        self.check_acolyte.setToolTip("Flashes a warning on-screen when an Acolyte is about to spawn.\nRequires 'Track Enemy data' to be enabled.")
+        self.check_acolyte.setToolTip("Flashes a warning on-screen when an Acolyte taunt is detected in the log.<br>Requires 'Track Log Data' to be enabled.")
         self.check_acolyte.toggled.connect(lambda c: self.btn_conf_acolyte.setEnabled(c))
         acolyte_layout.addWidget(self.check_acolyte)
         
@@ -351,7 +361,7 @@ class SettingsDialog(QtWidgets.QDialog):
         effigy_group = QtWidgets.QGroupBox("Effigy Warner")
         effigy_layout = QtWidgets.QHBoxLayout()
         self.check_effigy = QtWidgets.QCheckBox("Enable")
-        self.check_effigy.setToolTip("Flashes a warning when 'AllyLive' count drops (indicating Effigy death).\nRequires Log Tracking.")
+        self.check_effigy.setToolTip("Flashes a warning when the number of active allies drops below a threshold, which can indicate Chroma's Effigy has been destroyed.<br>Requires 'Track Log Data' to be enabled.")
         self.check_effigy.toggled.connect(lambda c: self.btn_conf_effigy.setEnabled(c))
         effigy_layout.addWidget(self.check_effigy)
         
@@ -369,7 +379,7 @@ class SettingsDialog(QtWidgets.QDialog):
         sound_layout = QtWidgets.QHBoxLayout()
         self.check_sound = QtWidgets.QCheckBox("Sound Alert on Scan")
         self.check_sound.setChecked(False)
-        self.check_sound.setToolTip("Plays a short 'beep' sound to confirm a successful scan has been processed.")
+        self.check_sound.setToolTip("Enables audio cues for events like successful/failed scans and warnings.<br>Click 'Configure Sounds...' to customize.")
         sound_layout.addWidget(self.check_sound)
         self.btn_sound_config = QtWidgets.QPushButton("Configure Sounds...")
         self.btn_sound_config.clicked.connect(self.open_sound_config)
@@ -378,13 +388,13 @@ class SettingsDialog(QtWidgets.QDialog):
 
         self.check_debug = QtWidgets.QCheckBox("DEBUG MODE")
         self.check_debug.setChecked(False)
-        self.check_debug.setToolTip("Enables detailed logging and saves screenshots of failed scans to a DEBUG_INFO folder.")
+        self.check_debug.setToolTip("Enables detailed logging. Saves screenshots of OCR warnings/failures and a copy of the game's EE.log for the run inside a 'DEBUG_INFO' folder.<br>Useful for troubleshooting.<br><b>Requires 'Track Log Data' to be enabled.</b>")
         layout.addWidget(self.check_debug)
 
         # FPS Checkbox
         self.check_fps = QtWidgets.QCheckBox("Track FPS (Requires PresentMon.exe)")
         self.check_fps.setChecked(False)
-        self.check_fps.setToolTip("Tracks Frames Per Second using PresentMon.\nRequires PresentMon.exe in the same folder.")
+        self.check_fps.setToolTip("Tracks Frames Per Second using PresentMon.exe.<br><b>Requires the tracker to be run as Administrator.</b>")
         layout.addWidget(self.check_fps)
 
         # Number Overlay
@@ -424,7 +434,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         self.check_pb_live = QtWidgets.QCheckBox("Animate PB Progress")
         self.check_pb_live.setChecked(True)
-        self.check_pb_live.setToolTip("Checked: PB line grows with time (Live).\nUnchecked: PB line is fully visible from start (Static).")
+        self.check_pb_live.setToolTip("<b>Checked:</b> The Personal Best line on the graph will be drawn in real-time, growing along with your current run.<br><b>Unchecked:</b> The full PB line will be shown from the start.")
         pb_layout.addWidget(self.check_pb_live)
         
         pb_group.setLayout(pb_layout)
@@ -436,16 +446,17 @@ class SettingsDialog(QtWidgets.QDialog):
         rec_layout.setContentsMargins(0, 0, 0, 0)
         rec_layout.addWidget(QtWidgets.QLabel("Data Recording Rate:"))
         self.combo_rec_rate = QtWidgets.QComboBox()
+        self.combo_rec_rate.addItem("Ultra (25ms)", 25)
         self.combo_rec_rate.addItem("High Precision (100ms)", 100)
         self.combo_rec_rate.addItem("Balanced (500ms)", 500)
         self.combo_rec_rate.addItem("Low Resource (1000ms)", 1000)
-        self.combo_rec_rate.setToolTip("Controls how often data is saved to the CSV.\n• 100ms: Large files, high RAM, smooth 'Live' graphs.\n• 1000ms: Small files, low RAM.\nNote: Total Kills and KPM remain accurate regardless of this setting.")
+        self.combo_rec_rate.setToolTip("How often to sample data from the log reader and save a row to the master CSV.<br>• <b>Ultra/High:</b> Smoother live graphs, larger CSV files, higher RAM usage.<br>• <b>Balanced/Low:</b> Less resource intensive, smaller files, but graphs may appear less smooth.<br><i>Note: This only affects data from 'Track Log Data' and 'Track FPS'. OCR data is only recorded on TAB press.</i>")
         rec_layout.addWidget(self.combo_rec_rate)
         layout.addWidget(rec_row)
         
         # Log Update Rate Input
         self.log_rate_container = QtWidgets.QWidget()
-        self.log_rate_container.setToolTip("These settings only affect how often the live graphs are visually updated.\nData is always recorded at the highest possible frequency in the background.")
+        self.log_rate_container.setToolTip("Controls how frequently the live graphs are visually redrawn.<br>Lower values result in smoother-looking plots but use more CPU.<br>This is separate from the 'Data Recording Rate' which controls CSV data.")
         self.log_rate_layout = QtWidgets.QVBoxLayout(self.log_rate_container)
         self.log_rate_layout.setContentsMargins(20, 0, 0, 0)
         
@@ -630,6 +641,9 @@ class SettingsDialog(QtWidgets.QDialog):
         self.check_effigy.setEnabled(log_tracking_enabled)
         self.btn_conf_effigy.setEnabled(log_tracking_enabled and self.check_effigy.isChecked())
         self.check_add_log_kpm.setEnabled(log_tracking_enabled)
+        self.check_debug.setEnabled(log_tracking_enabled)
+        if not log_tracking_enabled:
+            self.check_debug.setChecked(False)
         
         self.combo_cpm_mode.setEnabled(self.check_credits.isChecked())
         is_cpm_rolling = (self.combo_cpm_mode.currentIndex() == 1)
@@ -687,8 +701,16 @@ class SettingsDialog(QtWidgets.QDialog):
                         with open(self.settings_file, 'w') as f:
                             json.dump(self.get_settings(), f, indent=4)
                     except Exception: pass
-                    # Only this line is needed:
-                    ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, f'"{os.path.abspath(sys.modules["__main__"].__file__)}"', os.getcwd(), 1)
+                    
+                    # Check for batch file to preserve environment variables (Embedded version support)
+                    bat_path = os.path.abspath("Start_Tracker.bat")
+                    if os.path.exists(bat_path):
+                        # Relaunch via batch file
+                        ctypes.windll.shell32.ShellExecuteW(None, "runas", bat_path, None, os.getcwd(), 1)
+                    else:
+                        # Fallback for source code version
+                        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, f'"{os.path.abspath(sys.modules["__main__"].__file__)}"', os.getcwd(), 1)
+                    
                     sys.exit(0)
                 else:
                     self.check_fps.setChecked(False)
@@ -881,6 +903,8 @@ class SettingsDialog(QtWidgets.QDialog):
             if QtCore.qFuzzyCompare(self.combo_log_rate.itemData(i), saved_rate):
                 self.combo_log_rate.setCurrentIndex(i)
                 break
+        
+        self.update_rate_state()
 
     def get_settings(self):
         return {
