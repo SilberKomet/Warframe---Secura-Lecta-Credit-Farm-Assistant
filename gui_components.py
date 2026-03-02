@@ -234,9 +234,8 @@ class DraggableNumberOverlay(QtWidgets.QLabel):
 
     def update_style(self):
         # Add a slight shadow/outline effect for readability on game backgrounds
-        self.setStyleSheet(f"color: {self.color_hex}; font-weight: bold; font-family: Arial; "
+        self.setStyleSheet(f"color: {self.color_hex}; font-weight: bold; font-family: Arial; font-size: {self.font_size}pt; "
                            f"qproperty-alignment: AlignCenter;")
-        self.setFont(QtGui.QFont("Arial", self.font_size))
         self.adjustSize()
 
     def update_value(self, value):
@@ -361,8 +360,7 @@ class AcolyteWarner(QtWidgets.QLabel):
             self.move(mon_l + (mon_w - w) // 2, mon_t + (mon_h - h) // 2)
 
     def update_style(self):
-        self.setStyleSheet(f"color: white; font-weight: bold; font-family: Arial;")
-        self.setFont(QtGui.QFont("Arial", self.font_size))
+        self.setStyleSheet(f"color: white; font-weight: bold; font-family: Arial; font-size: {self.font_size}pt;")
         self.adjustSize()
 
     def paintEvent(self, event):

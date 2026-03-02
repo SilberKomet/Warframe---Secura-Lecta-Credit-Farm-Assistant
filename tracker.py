@@ -225,7 +225,7 @@ class WarframeTracker(QtCore.QObject):
         self.sound_config = self.settings.get("sound_config", {})
         self.use_overlay = self.settings.get('use_overlay', False)
         
-        self.effigy_threshold = 3 if self.settings.get('mode', 'Solo') == 'Duo' else 2
+        self.effigy_threshold = 3 if self.settings.get('mode', 'Solo') == 'Duo' else 1
         print(f"[Init] Effigy Warning Threshold set to {self.effigy_threshold} (Mode: {self.settings.get('mode', 'Solo')})")
 
         # Load PB Data early to determine layout

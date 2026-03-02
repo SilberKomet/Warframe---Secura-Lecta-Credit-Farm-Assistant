@@ -20,6 +20,8 @@ easyocr_models/
 # Ignore the patch generator script
 Branch_tests.py
 CPM_OOP.py
+build_release.py
+create_launcher.py
 
 # Ignore generated patch folders
 Branch_Patch_*

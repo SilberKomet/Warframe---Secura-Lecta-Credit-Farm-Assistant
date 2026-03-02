@@ -8,6 +8,8 @@ ACOLYTE_MAP = {
     "Rogue":    {"name": "Mania",    "duration": 5.1},
     "Control":  {"name": "Torment",  "duration": 5.1},
     "Heavy":    {"name": "Malice",   "duration": 5.1},
+    "AreaCaster": {"name": "Misery", "duration": 5.1},
+    "Striker":    {"name": "Angst",  "duration": 5.1},
 }
 SCREAM_ACOLYTE_NAME = "Acolyte" # Generic for Misery/Angst
 SCREAM_DURATION = 11.5
@@ -34,9 +36,9 @@ class LogReader:
         self.spawned_pattern = re.compile(r"Spawned\s+(\d+)")
         self.ally_live_pattern = re.compile(r"AllyLive\s+(\d+)")
 
-        self.acolyte_taunt_pattern = re.compile(r"/Lotus/Sounds/Dialog/Taunts/Acolytes/(?P<tag>Duellist|Rogue|Control|Heavy)AcolyteTaunt")
+        self.acolyte_taunt_pattern = re.compile(r"/Lotus/Sounds/Dialog/Taunts/Acolytes/(?P<tag>Duellist|Rogue|Control|Heavy|AreaCaster|Striker)AcolyteTaunt")
         self.acolyte_scream_pattern = re.compile(r"ScreamDebuffAttachProj")
-        self.acolyte_defeat_pattern = re.compile(r"/Lotus/Sounds/Dialog/Taunts/Acolytes/(?P<tag>Duellist|Rogue|Control|Heavy)AcolyteDefeat")
+        self.acolyte_defeat_pattern = re.compile(r"/Lotus/Sounds/Dialog/Taunts/Acolytes/(?P<tag>Duellist|Rogue|Control|Heavy|AreaCaster|Striker)AcolyteDefeat")
     def start(self):
         """Starts the monitoring thread."""
         if self.thread is not None and self.thread.is_alive():
@@ -109,7 +111,7 @@ class LogReader:
                 print(f"[LogReader] ACOLYTE WARNING DETECTED: {acolyte['name']}")
                 with self.lock:
                     self.triggered_acolytes.append((acolyte['name'], acolyte['duration']))
-                return # Don't process other things on this line
+                return 
 
         if self.acolyte_scream_pattern.search(line):
             now = time.time()

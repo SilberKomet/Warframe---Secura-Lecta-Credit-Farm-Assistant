@@ -60,14 +60,24 @@ If you have Python installed and want to run the raw scripts/edit the code yours
    ```
    *(Or run `python main.py` directly)*
 
-## Loading your Configurations into a new Version
-**Recommended Method:**
+## How to Update / Load Configurations
+
+### Option 1: Update Package (Easiest)
+For updating an existing installation without re-downloading the large Python environment.
+1. Go to the Releases page.
+2. Download the latest `Update_Tracker_vX.X.X.zip` file.
+3. Extract it anywhere.
+4. Run `apply_update.bat`.
+5. When prompted, drag and drop your main Lecta Tracker folder (the one with `Start_Tracker.bat`) into the command window and press Enter.
+6. Your scripts will be updated automatically, keeping all your settings safe.
+
+### Option 2: In-App Import (For full downloads)
 1. Launch the new version of the tracker.
 2. In the Settings menu, click the **"Import Config from Previous Version"** button (at the bottom).
 3. Select the **Main Folder** of your previous version (the folder containing `Start_Tracker.bat`).
 4. The tracker will automatically find and copy your bounding boxes, settings, and screenshots.
 
-**Manual Method:**
+### Option 3: Manual Copy
 Copy all `.json` and `.png` files from your old `python_and_required_packages\LECTA_SCRIPTS` folder and paste them into the same location in the new version.
 
 ---
@@ -106,9 +116,10 @@ For a detailed explanation of the CSV data, runtime logs, and debug files, pleas
 
 ## Requirements
 - Warframe must be running on the **Primary Monitor**.
+- You must use either Borderless Fullscreen or Windowed Game Mode to be able to see the Number overlay.
 - Interface Scale in Warframe should be consistent (default 100 recommended).
 - **PresentMon.exe** must be in the ``LECTA_SCRIPTS`` for FPS tracking.
-  - *Note:* This project uses **PresentMon v1.6.0** (Legacy). Newer versions of Intel PresentMon have changed their output format and command-line arguments, which are not compatible with this tracker's parsing logic. The correct version is included in the release.
+  - *Note:* This project uses **PresentMon v1.6.0** (Legacy). Newer versions of Intel PresentMon have changed their output format and command-line arguments, which are not compatible with this tracker's parsing logic. The correct version is included in the release (https://github.com/GameTechDev/PresentMon).
 
 
 ## General Notes and Feature explenation
