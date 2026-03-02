@@ -729,9 +729,6 @@ class SettingsDialog(QtWidgets.QDialog):
         self.check_debug.setEnabled(log_tracking_enabled)
         if not log_tracking_enabled:
             self.check_debug.setChecked(False)
-            self.check_acolyte.setChecked(False)
-            self.check_effigy.setChecked(False)
-            self.check_add_log_kpm.setChecked(False)
         
         self.combo_cpm_mode.setEnabled(self.check_credits.isChecked())
         is_cpm_rolling = (self.combo_cpm_mode.currentIndex() == 1)
