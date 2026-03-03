@@ -36,14 +36,16 @@ class WarframeTracker(QtCore.QObject):
     sig_start_log_timer = QtCore.pyqtSignal()
     sig_stop_log_timer = QtCore.pyqtSignal()
     request_run_end = QtCore.pyqtSignal()
+    request_run_start = QtCore.pyqtSignal()
     sig_update_overlay_data = QtCore.pyqtSignal(dict)
     sig_ability_warning = QtCore.pyqtSignal()
     sig_ability_restored = QtCore.pyqtSignal()
 
-    def __init__(self, settings):
+    def __init__(self, settings, dialog_instance= None):
         super().__init__() #initializing the QObject parent class
         self.app_start_time = time.perf_counter()
         self.settings = settings
+        self.dialog = dialog_instance
         
         # Initialize QApplication early so we can use GUI elements (ROI Selector) in __init__
         self.app = QtWidgets.QApplication.instance()
@@ -89,6 +91,7 @@ class WarframeTracker(QtCore.QObject):
         self.sig_start_log_timer.connect(self._start_log_timer_slot)
         self.sig_stop_log_timer.connect(self._stop_log_timer_slot)
         self.request_run_end.connect(self.run_end)
+        self.request_run_start.connect(self.start_run)
         self.sig_update_overlay_data.connect(self._update_overlay_slot)
         self.sig_ability_warning.connect(self.trigger_ability_warning)
         self.sig_ability_restored.connect(self.clear_ability_warning)
@@ -175,6 +178,7 @@ class WarframeTracker(QtCore.QObject):
         """Initializes or re-initializes the tracker session based on current settings."""
         
         # Reset Data Containers
+        
         self.creds = []
         self.confidences = []
         self.credit_positions = []
@@ -222,8 +226,12 @@ class WarframeTracker(QtCore.QObject):
         self.always_on_top = self.settings['always_on_top']
         self.use_sound = self.settings['use_sound']
         self.debug_mode = self.settings['debug_mode']
+
+
+
         self.sound_config = self.settings.get("sound_config", {})
         self.use_overlay = self.settings.get('use_overlay', False)
+        self.plot_config = self.settings.get('plot_config', {})
         
         self.effigy_threshold = 3 if self.settings.get('mode', 'Solo') == 'Duo' else 1
         print(f"[Init] Effigy Warning Threshold set to {self.effigy_threshold} (Mode: {self.settings.get('mode', 'Solo')})")
@@ -254,16 +262,48 @@ class WarframeTracker(QtCore.QObject):
             if reply == QtWidgets.QMessageBox.No:
                 sys.exit(0)
 
+        
         #Setup the Live GUI (Must be on the main thread)
+        print("[DEBUG] Initializing main Graph Window...")
+        
+        # Memorize the exact position and size of the old window before closing it
+        old_geom = None
         if self.win is not None:
+            old_geom = self.win.geometry()
             self.win.close()
             
-        self.win = pg.GraphicsLayoutWidget(show=True, title="Warframe Tracker")
+        # 1. Create it HIDDEN first
+        self.win = pg.GraphicsLayoutWidget(show=False, title="Warframe Tracker")
+        
+        # 2. Gather base window flags (NO frameless hint yet!)
+        flags = self.win.windowFlags()
         if self.always_on_top:
-            self.win.setWindowFlags(self.win.windowFlags() | QtCore.Qt.WindowStaysOnTopHint)
+            flags |= QtCore.Qt.WindowStaysOnTopHint
+            
+        # 3. Apply the base flags
+        self.win.setWindowFlags(flags)
+        
+        # 4. Apply Transparency Settings
+        opacity = self.plot_config.get("background_opacity", 100)
+        self.win.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+        alpha = int(255 * opacity / 100)
+        self.win.setBackground('transparent')
+        self.win.setStyleSheet(f"background-color: rgba(20, 20, 20, {alpha});")
+        
+        # 5. Show the window and restore its exact previous shape
+        print("[DEBUG] Setup Phase: Showing window with draggable borders.")
         self.win.show()
-        self.win.resize(800, 500)
+        
+        if old_geom:
+            self.win.setGeometry(old_geom) # Put it exactly back where the user left it!
+        else:
+            self.win.resize(800, 500) # Default size for the very first launch
+            
         self.win.ci.layout.setSpacing(30)
+        self.win.ci.layout.setContentsMargins(15, 35, 15, 15)
+
+
+        
         
         #setting tick font size
         my_font = QtGui.QFont()
@@ -287,6 +327,12 @@ class WarframeTracker(QtCore.QObject):
         num_plots = len(active_plots)
         use_grid = num_plots >= 4
 
+        def style_plot(plot_item, color):
+                plot_item.getAxis('left').setPen(color)
+                plot_item.getAxis('left').setTextPen(color)
+                plot_item.getAxis('bottom').setPen(color)
+                plot_item.getAxis('bottom').setTextPen(color)
+
         for i, p_type in enumerate(active_plots):
             # Grid Management
             if use_grid:
@@ -296,81 +342,99 @@ class WarframeTracker(QtCore.QObject):
                 if i > 0:
                     self.win.nextRow()
 
-            # Plot Creation
+            # Get colors for this plot type
+            p_colors = self.plot_config.get("plots", {}).get(p_type, {"line": "y", "axis": "w"})
+            line_color = p_colors.get("line", "y")
+            axis_color = p_colors.get("axis", "w")
+            axis_color_hex = pg.mkColor(axis_color).name()
+            
+            # Helper to set axis colors
+            
+
+            # Determine Title String
+            title_str = ""
+            if p_type == 'cpm':
+                title_str = f"CPM (Rolling {self.cpm_window}s)" if self.cpm_rolling else "Credits Per Minute (CPM)"
+            elif p_type == 'creds':
+                title_str = "Total Credits"
+            elif p_type == 'kpm':
+                title_str = f"KPM (Rolling {self.tab_kpm_window}s)" if self.tab_kpm_rolling else "Kills Per Minute (KPM)"
+            elif p_type == 'log_kpm':
+                title_str = f"Log KPM (Rolling {self.log_kpm_window}s)" if self.log_kpm_rolling else "Log KPM (Cumulative)"
+            elif p_type == 'fps':
+                title_str = "Frames Per Second"
+            elif p_type == 'live':
+                title_str = "Amount of alive enemies"
+
+            # Plot Creation Arguments
+            # Plot Creation Arguments
             args = {}
-            # Special case: 5 plots -> last one spans 2 columns
             if use_grid and num_plots == 5 and i == 4:
                 args['colspan'] = 2
-            
-            # Axis items for Credits (only if not video)
-            if p_type == 'creds':
-                args['axisItems'] = {'left': LargeNumberAxisItem(orientation='left')}
 
+            # 1. CREATE PLOT FIRST (Ohne Titel in den Argumenten, um den Row-0-Bug zu umgehen)
             p = self.win.addPlot(**args)
+            
+            # 2. GRAFT CUSTOM FORMATTING
+            if p_type in ['creds', 'cpm']:
+                custom_axis = LargeNumberAxisItem(orientation='left')
+                p.getAxis('left').tickStrings = custom_axis.tickStrings
+            
+            # 3. TITEL NACHTRÄGLICH SETZEN
+            if title_str:
+                p.setTitle(title_str, color=axis_color, size="16pt")
+            
+            # Lock down mouse interaction (zoom/pan)
+            p.setMouseEnabled(x=False, y=False)
+            p.hideButtons()
+            
+            # Apply Styling
             p.showGrid(x=True, y=True)
             p.getAxis('bottom').setTickFont(my_font)
             p.getAxis('left').setTickFont(my_font)
             p.getAxis('bottom').enableAutoSIPrefix(False)
             p.setLabel('bottom', 'Time (min)')
-            
-            # We will add PB curves here, but initialize them as None first
+            style_plot(p, axis_color)
 
             # Specific Configuration
             if p_type == 'cpm':
                 self.plot_cpm = p
-                title = "Credits Per Minute (CPM)"
-                if self.cpm_rolling:
-                    title = f"CPM (Rolling {self.cpm_window}s)"
-                p.setTitle(title, size="16pt")
-                p.setAxisItems({'left': LargeNumberAxisItem(orientation='left')})
                 p.setLabel('left', 'CPM')
-                self.curve_cpm = p.plot(pen='y', symbol='o')
-                self.curve_cpm_pb = p.plot(pen=pg.mkPen('y', style=QtCore.Qt.DotLine))
-                
+                self.curve_cpm = p.plot(pen=line_color, symbol='o', symbolBrush=line_color)
+                self.curve_cpm_pb = p.plot(pen=pg.mkPen(line_color, style=QtCore.Qt.DotLine))
                 if self.show_high_cpm:
                     self.cpm_high_line = pg.InfiniteLine(angle=0, pen=pg.mkPen('w', style=QtCore.Qt.DashLine))
                     p.addItem(self.cpm_high_line)
-            
+                    
             elif p_type == 'creds':
                 self.plot_creds = p
-                p.setTitle("Total Credits", size="16pt")
                 p.setLabel('left', 'Credits')
-                self.curve_creds = p.plot(pen='g', symbol='o')
-                self.curve_creds_pb = p.plot(pen=pg.mkPen('g', style=QtCore.Qt.DotLine))
+                self.curve_creds = p.plot(pen=line_color, symbol='o', symbolBrush=line_color)
+                self.curve_creds_pb = p.plot(pen=pg.mkPen(line_color, style=QtCore.Qt.DotLine))
 
             elif p_type == 'kpm':
                 self.plot_kpm = p
-                title = "Kills Per Minute (KPM)"
-                if self.tab_kpm_rolling:
-                    title = f"KPM (Rolling {self.tab_kpm_window}s)"
-                p.setTitle(title, size="16pt")
                 p.setLabel('left', 'KPM')
-                self.curve_kpm = p.plot(pen='r', symbol='o')
-                self.curve_kpm_pb = p.plot(pen=pg.mkPen('r', style=QtCore.Qt.DotLine))
+                self.curve_kpm = p.plot(pen=line_color, symbol='o', symbolBrush=line_color)
+                self.curve_kpm_pb = p.plot(pen=pg.mkPen(line_color, style=QtCore.Qt.DotLine))
 
             elif p_type == 'log_kpm':
                 self.plot_log_kpm = p
-                title = "Log KPM (Cumulative)"
-                if self.log_kpm_rolling:
-                    title = f"Log KPM (Rolling {self.log_kpm_window}s)"
-                p.setTitle(title, size="16pt")
                 p.setLabel('left', 'KPM')
-                self.curve_log_kpm = p.plot(pen='m', name='Log KPM')
-                self.curve_log_kpm_pb = p.plot(pen=pg.mkPen('m', style=QtCore.Qt.DotLine))
+                self.curve_log_kpm = p.plot(pen=line_color, name='Log KPM')
+                self.curve_log_kpm_pb = p.plot(pen=pg.mkPen(line_color, style=QtCore.Qt.DotLine))
 
             elif p_type == 'fps':
                 self.plot_fps = p
-                p.setTitle("Frames Per Second", size="16pt")
                 p.setLabel('left', 'FPS')
-                self.curve_fps = p.plot(pen='c', name='FPS')
-                self.curve_fps_pb = p.plot(pen=pg.mkPen('c', style=QtCore.Qt.DotLine))
+                self.curve_fps = p.plot(pen=line_color, name='FPS')
+                self.curve_fps_pb = p.plot(pen=pg.mkPen(line_color, style=QtCore.Qt.DotLine))
 
             elif p_type == 'live':
                 self.plot_live = p
-                p.setTitle("Amount of alive enemies", size="16pt")
                 p.setLabel('left', 'Count')
-                self.curve_live = p.plot(pen='c', name='num alive')
-                self.curve_live_pb = p.plot(pen=pg.mkPen('c', style=QtCore.Qt.DotLine))
+                self.curve_live = p.plot(pen=line_color, name='num alive')
+                self.curve_live_pb = p.plot(pen=pg.mkPen(line_color, style=QtCore.Qt.DotLine))
 
 
         # --- Load Overlay Positions (Early) ---
@@ -491,7 +555,7 @@ class WarframeTracker(QtCore.QObject):
 
 
     def setup_hotkeys(self):
-        key.add_hotkey('f8', self.start_run)
+        key.add_hotkey('f8', self.request_run_start.emit)
         # Use on_press_key for TAB to ensure it triggers even if other keys (like WASD) are held
         key.on_press_key('tab', self.on_tab_press)
         key.on_release_key('tab', self.on_tab_release)
@@ -742,6 +806,8 @@ class WarframeTracker(QtCore.QObject):
         except Exception as e:
             print(f"[System] Error saving overlay positions: {e}")
 
+    
+
     def start_run(self):
         # Ensure any previous run state is cleared
         self.start_time = None
@@ -753,6 +819,38 @@ class WarframeTracker(QtCore.QObject):
         self.start_time = time.perf_counter()
         self.last_plot_update = 0
 
+       # --- LOCK WINDOWS (Remove borders & make click-through) ---
+        opacity = self.plot_config.get("background_opacity", 100)
+        
+        # 1. Main Graph Window (Lightweight Qt lock to prevent ghosting)
+        current_geom = self.win.geometry()
+        self.win.hide()
+        flags = self.win.windowFlags()
+        flags |= QtCore.Qt.FramelessWindowHint
+        self.win.setWindowFlags(flags)
+        self.win.show()
+        self.win.setGeometry(current_geom)
+        self.win.raise_()
+        self.win.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
+        
+        
+        # 2. Number Overlays (Heavy OS lock to defeat custom drag logic)
+        for ov in self.number_overlays.values():
+            curr_geom = ov.geometry()
+            flags = ov.windowFlags()
+            flags |= QtCore.Qt.WindowTransparentForInput
+            ov.setWindowFlags(flags)
+            ov.show() # Safe because they are always visible during a run
+            ov.setGeometry(curr_geom)
+            
+        # 3. Warners (Heavy OS lock, but DO NOT show() them yet!)
+        # 3. Warners (Qt Attribute lock so it survives hiding/showing)
+        if self.acolyte_warner:
+            self.acolyte_warner.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
+            
+        if self.effigy_warner:
+            self.effigy_warner.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
+        # -----------------------------------------------------
         # Save overlay positions on run start
         self.save_overlay_positions()
 
@@ -874,6 +972,32 @@ class WarframeTracker(QtCore.QObject):
                  self.log(f"Log KPM Mode: {kpm_mode_str}")
                  self.log(f"Add Log KPM Plot: {self.add_log_kpm_plot}")
                  self.log(f"Acolyte Warner: {self.settings.get('acolyte_warner_enabled', False)}")
+            
+            # --- Detailed Configuration Dump ---
+            self.log("--- DETAILED CONFIGURATION DUMP ---")
+            self.log(f"Scan Area 1: [{self.scan_left}, {self.scan_top}, {self.scan_right}, {self.scan_lower}]")
+            self.log(f"Credit Positions 1: {self.credit_positions}")
+            
+            if hasattr(self, 'scan_left_2') and self.scan_left_2 > 0:
+                self.log(f"Scan Area 2: [{self.scan_left_2}, {self.scan_top_2}, {self.scan_right_2}, {self.scan_lower_2}]")
+                self.log(f"Credit Positions 2: {self.credit_positions_2}")
+            
+            if self.track_kills and hasattr(self, 'left_kills'):
+                self.log(f"Kills Box: [{self.left_kills}, {self.top_kills}, {self.right_kills}, {self.lower_kills}]")
+
+            self.log(f"Plot Config: {json.dumps(self.plot_config)}")
+            if self.use_overlay:
+                self.log(f"Overlay Config: {json.dumps(self.settings.get('overlay_config', {}))}")
+                if os.path.exists(self.overlay_positions_file):
+                    try:
+                        with open(self.overlay_positions_file, 'r') as f:
+                            self.log(f"Overlay Positions: {f.read()}")
+                    except: pass
+            
+            if self.use_sound:
+                self.log(f"Sound Config: {json.dumps(self.sound_config)}")
+
+            self.log(f"Full Settings: {json.dumps(self.settings, default=str)}")
             self.log("-" * 40)
         except Exception as e:
             print(f"[CRITICAL] Could not create output folder. Error: {e}")
@@ -1483,7 +1607,44 @@ class WarframeTracker(QtCore.QObject):
         # Stop accepting new data immediately to prevent race conditions
         self.start_time = None
         
-        if not self:
+        # --- UNLOCK WINDOWS (Restore borders & interaction) ---
+        print("[DEBUG] Run Ended. Restoring window interactions.")
+        opacity = self.plot_config.get("background_opacity", 100)
+        
+        # 1. Main Graph Window
+        # 1. Main Graph Window
+        current_geom = self.win.geometry()
+        self.win.hide()
+        flags = self.win.windowFlags()
+        flags &= ~QtCore.Qt.FramelessWindowHint
+        self.win.setWindowFlags(flags)
+        
+        # Apply the transparent-for-mouse-events fix BEFORE drawing the frame
+        self.win.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, False)
+        
+        self.win.show()
+        self.win.setGeometry(current_geom)
+        self.win.raise_()
+        
+        # 2. Number Overlays
+        for ov in self.number_overlays.values():
+            curr_geom = ov.geometry()
+            flags = ov.windowFlags()
+            flags &= ~QtCore.Qt.WindowTransparentForInput
+            ov.setWindowFlags(flags)
+            ov.show()
+            ov.setGeometry(curr_geom)
+            
+        # 3. Warners
+        if self.acolyte_warner:
+            self.acolyte_warner.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, False)
+            
+        if self.effigy_warner:
+            self.effigy_warner.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, False)
+        # ---------------------------------------
+
+        if not self.run_output_path:
+            output_dir = self.settings.get("output_path", os.path.join(os.getcwd(), "OUTPUT"))
             self.run_output_path = os.path.join(output_dir, "unsaved_run")
             os.makedirs(self.run_output_path, exist_ok=True)
             self.log(f"[End] Warning: Run was not started. Saving to '{self.run_output_path}'", important=True)
@@ -1678,12 +1839,32 @@ class WarframeTracker(QtCore.QObject):
         QtCore.QTimer.singleShot(100, self.prompt_next_run)
 
     def prompt_next_run(self):
-        # Open Settings Dialog again to allow user to start next run
-        dlg = SettingsDialog()
-        # Pre-load current settings
-        dlg.check_load_prev.setChecked(True)
-        dlg.load_previous_settings(True)
-        
-        if dlg.exec_() == QtWidgets.QDialog.Accepted:
-            self.settings = dlg.get_settings()
-            self.setup_session()
+        # Wake up the ORIGINAL Settings Dialog non-modally
+        if self.dialog:
+            self.dialog.check_load_prev.setChecked(True)
+            self.dialog.load_previous_settings(True)
+            
+            # Disconnect any old signals to prevent them from firing twice
+            try:
+                self.dialog.accepted.disconnect()
+                self.dialog.rejected.disconnect()
+            except TypeError:
+                pass # Signals were not connected yet
+                
+            # Wire up the event-driven signals
+            self.dialog.accepted.connect(self._on_dialog_accepted)
+            self.dialog.rejected.connect(self._on_dialog_rejected)
+            
+            # Show the dialog without locking the rest of the application
+            self.dialog.show()
+            self.dialog.raise_()
+            self.dialog.activateWindow()
+
+    def _on_dialog_accepted(self):
+        self.settings = self.dialog.get_settings()
+        self.setup_session() # This wipes the plots, applies new settings, and restores geometry
+
+    def _on_dialog_rejected(self):
+        # User clicked the 'X' to close the app entirely
+        print("[End] App closed by user.")
+        self.app.quit()
