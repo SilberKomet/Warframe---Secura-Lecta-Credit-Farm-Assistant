@@ -278,7 +278,7 @@ class WarframeTracker(QtCore.QObject):
         if self.track_kills or 'KPM' in pb_cols:
             active_plots.append('kpm')
         if self.track_logs or 'Spawned' in pb_cols or 'Live' in pb_cols:
-            active_plots.extend(['spawned', 'live'])
+            active_plots.append('live')
             if self.add_log_kpm_plot or 'Log_KPM' in pb_cols:
                 active_plots.append('log_kpm')
         if self.track_fps or 'FPS' in pb_cols:
@@ -348,20 +348,6 @@ class WarframeTracker(QtCore.QObject):
                 self.curve_kpm = p.plot(pen='r', symbol='o')
                 self.curve_kpm_pb = p.plot(pen=pg.mkPen('r', style=QtCore.Qt.DotLine))
 
-            elif p_type == 'spawned':
-                self.plot_spawned = p
-                p.setTitle("Total Enemies spawned", size="16pt")
-                p.setLabel('left', 'Count')
-                self.curve_spawned = p.plot(pen='m', name='Spawned')
-                self.curve_spawned_pb = p.plot(pen=pg.mkPen('m', style=QtCore.Qt.DotLine))
-
-            elif p_type == 'live':
-                self.plot_live = p
-                p.setTitle("Amount of alive enemies", size="16pt")
-                p.setLabel('left', 'Count')
-                self.curve_live = p.plot(pen='c', name='num alive')
-                self.curve_live_pb = p.plot(pen=pg.mkPen('c', style=QtCore.Qt.DotLine))
-
             elif p_type == 'log_kpm':
                 self.plot_log_kpm = p
                 title = "Log KPM (Cumulative)"
@@ -378,6 +364,14 @@ class WarframeTracker(QtCore.QObject):
                 p.setLabel('left', 'FPS')
                 self.curve_fps = p.plot(pen='c', name='FPS')
                 self.curve_fps_pb = p.plot(pen=pg.mkPen('c', style=QtCore.Qt.DotLine))
+
+            elif p_type == 'live':
+                self.plot_live = p
+                p.setTitle("Amount of alive enemies", size="16pt")
+                p.setLabel('left', 'Count')
+                self.curve_live = p.plot(pen='c', name='num alive')
+                self.curve_live_pb = p.plot(pen=pg.mkPen('c', style=QtCore.Qt.DotLine))
+
 
         # --- Load Overlay Positions (Early) ---
         self.saved_positions = {}
@@ -798,20 +792,18 @@ class WarframeTracker(QtCore.QObject):
         if hasattr(self, 'curve_cpm_pb'):
             self.curve_cpm_pb.setData([], [])
             self.curve_creds_pb.setData([], [])
-        
         if hasattr(self, 'cpm_high_line'):
             self.cpm_high_line.setValue(0)
         if hasattr(self, 'curve_kpm_pb'):
             self.curve_kpm_pb.setData([], [])
-        if hasattr(self, 'curve_spawned_pb'):
-            self.curve_spawned_pb.setData([], [])
+        if hasattr(self, 'curve_live_pb'):
             self.curve_live_pb.setData([], [])
         if hasattr(self, 'curve_fps_pb'):
             self.curve_fps_pb.setData([], [])
         if hasattr(self, 'curve_log_kpm_pb'):
             self.curve_log_kpm_pb.setData([], [])
+
         
-        if self.track_logs:
             self.enemy_data = {"time": [], "live": [], "spawned": []}
             if self.track_kills:
                 self.enemy_data["kills"] = []
@@ -820,7 +812,6 @@ class WarframeTracker(QtCore.QObject):
             self.plot_data_spawned = {"t": [], "y": []}
             self.plot_data_kpm = {"t": [], "y": []}
             self.curve_live.setData([], [])
-            self.curve_spawned.setData([], [])
             
             if self.add_log_kpm_plot:
                 self.plot_data_log_kpm = {"t": [], "y": []}
@@ -829,8 +820,7 @@ class WarframeTracker(QtCore.QObject):
         if self.track_fps:
             self.plot_data_fps = {"t": [], "y": []}
             self.curve_fps.setData([], [])
-        
-        # --- Create Run Folder ---
+
         try:
             timestamp = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
             folder_name = f"{timestamp}"
@@ -919,19 +909,18 @@ class WarframeTracker(QtCore.QObject):
                 if 'Credits' in self.pb_data: self.curve_creds_pb.setData(t, self.pb_data['Credits'].to_numpy())
             if hasattr(self, 'curve_kpm_pb'):
                 if 'KPM' in self.pb_data: self.curve_kpm_pb.setData(t, self.pb_data['KPM'].to_numpy())
-            if hasattr(self, 'curve_spawned_pb'):
-                if 'Spawned' in self.pb_data: self.curve_spawned_pb.setData(t, self.pb_data['Spawned'].to_numpy())
+            if hasattr(self, 'curve_live_pb'):
                 if 'Live' in self.pb_data: self.curve_live_pb.setData(t, self.pb_data['Live'].to_numpy())
             if hasattr(self, 'curve_log_kpm_pb'):
                 if 'Log_KPM' in self.pb_data: self.curve_log_kpm_pb.setData(t, self.pb_data['Log_KPM'].to_numpy())
             if hasattr(self, 'curve_fps_pb'):
                 if 'FPS' in self.pb_data: self.curve_fps_pb.setData(t, self.pb_data['FPS'].to_numpy())
+            
+
 
     def trigger_ability_warning(self):
         if self.effigy_warner:
             self.effigy_warner.start_persistent_warning("Effigy dead")
-            
-            # Auto-hide after 8 seconds
             QtCore.QTimer.singleShot(8000, self.effigy_warner.stop_warning)
             
             effigy_cfg = self.settings.get("effigy_config", {})
@@ -1452,10 +1441,6 @@ class WarframeTracker(QtCore.QObject):
                 self.plot_data_live["t"].append(t)
                 self.plot_data_live["y"].append(live)
                 self.curve_live.setData(self.plot_data_live["t"], self.plot_data_live["y"])
-                
-                self.plot_data_spawned["t"].append(t)
-                self.plot_data_spawned["y"].append(spawned)
-                self.curve_spawned.setData(self.plot_data_spawned["t"], self.plot_data_spawned["y"])
             
             # Extra Log KPM Plot
             if self.add_log_kpm_plot:
@@ -1483,8 +1468,7 @@ class WarframeTracker(QtCore.QObject):
                     if hasattr(self, 'curve_kpm_pb'):
                         if 'KPM' in pb_slice: self.curve_kpm_pb.setData(t_pb, pb_slice['KPM'].to_numpy())
                     
-                    if hasattr(self, 'curve_spawned_pb'):
-                        if 'Spawned' in pb_slice: self.curve_spawned_pb.setData(t_pb, pb_slice['Spawned'].to_numpy())
+                    if hasattr(self, 'curve_live_pb'):
                         if 'Live' in pb_slice: self.curve_live_pb.setData(t_pb, pb_slice['Live'].to_numpy())
                     
                     if hasattr(self, 'curve_log_kpm_pb'):
@@ -1499,9 +1483,7 @@ class WarframeTracker(QtCore.QObject):
         # Stop accepting new data immediately to prevent race conditions
         self.start_time = None
         
-        if not self.run_output_path:
-            output_dir = os.path.join(os.getcwd(), "False_or_unfinished_runs")
-            os.makedirs(output_dir, exist_ok=True)
+        if not self:
             self.run_output_path = os.path.join(output_dir, "unsaved_run")
             os.makedirs(self.run_output_path, exist_ok=True)
             self.log(f"[End] Warning: Run was not started. Saving to '{self.run_output_path}'", important=True)

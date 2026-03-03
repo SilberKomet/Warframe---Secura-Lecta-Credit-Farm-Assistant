@@ -1,32 +1,33 @@
-# Python temporary files
+# Python cache
 __pycache__/
 *.py[cod]
 
-# User Data & Logs
+# Runtime Output folders
 OUTPUT/
+DEBUG_INFO/
+False_or_unfinished_runs/
+
+# Local Configuration files (User specific settings)
+bbox_config_*.json
+last_run_settings.json
+path_config.json
+profiles.json
+overlay_positions.json
+
+# Setup Screenshots
+setup_screenshot_*.png
+
+# Logs and temporary files
 *.log
 *.csv
-
-# Configuration Files (User specific)
-# We ignore these so your personal screen setup doesn't overwrite other people's setups
-*.json
-setup_screenshot_*.png
-*.png
 
 # Large Binaries or Environment folders
 python_and_required_packages/
 easyocr_models/
 
-# Ignore the patch generator script
-Branch_tests.py
-CPM_OOP.py
-build_release.py
-create_launcher.py
+# Ignore all PNGs (like screenshots) by default...
+*.png
 
-# Ignore generated patch folders
-Branch_Patch_*
-
-
-# VS Code / Editor settings
-.vscode/
-.idea/
+# ...BUT keep the application icons!
+!Credits.png
+!Background.png

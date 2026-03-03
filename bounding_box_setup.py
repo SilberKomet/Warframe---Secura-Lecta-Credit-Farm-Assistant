@@ -1,5 +1,6 @@
 import os
 import sys
+import ctypes
 import time
 import json
 import cv2 as cv
@@ -295,6 +296,17 @@ def main():
         QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
         QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
         app = QtWidgets.QApplication([])
+
+    # Set Application Icon
+    app_dir = os.path.dirname(os.path.abspath(__file__))
+    icon_path = os.path.join(app_dir, "Credits.png")
+    if not os.path.exists(icon_path):
+        icon_path = os.path.join(app_dir, "..", "Credits.png")
+
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QtGui.QIcon(icon_path))
+        # Fix for Windows Taskbar Icon
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(u'silberkomet.warframe.lectatracker.setup')
 
     # Dark Theme for Editor
     pg.setConfigOption('background', '#191919')

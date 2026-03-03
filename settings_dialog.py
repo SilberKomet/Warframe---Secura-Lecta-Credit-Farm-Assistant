@@ -125,6 +125,44 @@ class SettingsDialog(QtWidgets.QDialog):
         self.setWindowTitle("Tracker Settings")
         self.resize(600, 550)
         self.version = version
+
+        # --- Background Image Setup ---
+        self.setObjectName("SettingsDialog")
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+        bg_path = os.path.join(app_dir, "Background.png")
+        if not os.path.exists(bg_path):
+            bg_path = os.path.join(app_dir, "..", "Background.png")
+        
+        if os.path.exists(bg_path):
+            bg_path = bg_path.replace("\\", "/")
+            self.setStyleSheet(f"""
+                QDialog#SettingsDialog {{
+                    background-image: url({bg_path});
+                    background-position: center;
+                    background-repeat: no-repeat;
+                    background-color: #1e1e1e;
+                }}
+                QTabWidget {{
+                    background: transparent;
+                }}
+                QStackedWidget {{
+                    background: transparent;
+                }}
+                QTabWidget::pane {{
+                    background: rgba(30, 30, 30, 100);
+                    border: 1px solid #444;
+                }}
+                QWidget#TabPage {{
+                    background: transparent;
+                }}
+                QGroupBox {{
+                    background-color: rgba(30, 30, 30, 150);
+                    border: 1px solid #444;
+                    border-radius: 5px;
+                    margin-top: 20px;
+                }}
+            """)
+
         main_layout = QtWidgets.QVBoxLayout(self)
 
         self.settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_run_settings.json")
@@ -184,6 +222,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         # ================= TAB 1: GENERAL =================
         tab_general = QtWidgets.QWidget()
+        tab_general.setObjectName("TabPage")
         layout_gen = QtWidgets.QVBoxLayout(tab_general)
 
         # --- Profile Selection UI ---
@@ -250,6 +289,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         # ================= TAB 2: TRACKING =================
         tab_tracking = QtWidgets.QWidget()
+        tab_tracking.setObjectName("TabPage")
         layout_track = QtWidgets.QVBoxLayout(tab_tracking)
 
         # --- Credits ---
@@ -395,6 +435,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         # ================= TAB 3: ALERTS =================
         tab_alerts = QtWidgets.QWidget()
+        tab_alerts.setObjectName("TabPage")
         layout_alerts = QtWidgets.QVBoxLayout(tab_alerts)
 
         # Acolyte Warner (only available if log tracking is on)
@@ -445,6 +486,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         # ================= TAB 4: OVERLAY =================
         tab_overlay = QtWidgets.QWidget()
+        tab_overlay.setObjectName("TabPage")
         layout_overlay = QtWidgets.QVBoxLayout(tab_overlay)
         
         # Number Overlay
@@ -467,6 +509,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         # ================= TAB 5: ADVANCED =================
         tab_advanced = QtWidgets.QWidget()
+        tab_advanced.setObjectName("TabPage")
         layout_adv = QtWidgets.QVBoxLayout(tab_advanced)
 
         # Scan Delay
