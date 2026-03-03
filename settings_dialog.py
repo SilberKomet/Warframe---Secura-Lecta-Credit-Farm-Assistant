@@ -215,6 +215,18 @@ class SettingsDialog(QtWidgets.QDialog):
             "acolyte": {"type": "Custom Beep", "freq": 1500, "dur": 100, "vol": 100},
             "effigy": {"type": "Custom Beep", "freq": 1500, "dur": 100, "vol": 100}
         }
+        # Default Plot Config
+        self.plot_config = {
+            "background_opacity": 100,
+            "plots": {
+                "cpm": {"line": "#FFFF00", "axis": "#FFFFFF"},     # Yellow
+                "creds": {"line": "#00FF00", "axis": "#FFFFFF"},   # Green
+                "kpm": {"line": "#FF0000", "axis": "#FFFFFF"},     # Red
+                "log_kpm": {"line": "#FF00FF", "axis": "#FFFFFF"}, # Magenta
+                "live": {"line": "#00FFFF", "axis": "#FFFFFF"},    # Cyan
+                "fps": {"line": "#00FFFF", "axis": "#FFFFFF"}      # Cyan
+            }
+        }
 
         # --- Tabs Setup ---
         self.tabs = QtWidgets.QTabWidget()
@@ -484,7 +496,62 @@ class SettingsDialog(QtWidgets.QDialog):
         layout_alerts.addStretch()
         self.tabs.addTab(tab_alerts, "Alerts")
 
-        # ================= TAB 4: OVERLAY =================
+        # ================= TAB 4: APPEARANCE =================
+        tab_appearance = QtWidgets.QWidget()
+        tab_appearance.setObjectName("TabPage")
+        layout_appear = QtWidgets.QVBoxLayout(tab_appearance)
+
+        # Background Opacity
+        opacity_group = QtWidgets.QGroupBox("Window Background")
+        opacity_layout = QtWidgets.QHBoxLayout()
+        opacity_layout.addWidget(QtWidgets.QLabel("Opacity:"))
+        self.slider_bg_opacity = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.slider_bg_opacity.setRange(0, 100)
+        self.slider_bg_opacity.setValue(100)
+        self.slider_bg_opacity.valueChanged.connect(lambda v: self.lbl_bg_opacity.setText(f"{v}%"))
+        opacity_layout.addWidget(self.slider_bg_opacity)
+        self.lbl_bg_opacity = QtWidgets.QLabel("100%")
+        opacity_layout.addWidget(self.lbl_bg_opacity)
+        opacity_group.setLayout(opacity_layout)
+        layout_appear.addWidget(opacity_group)
+
+        # Plot Colors
+        colors_group = QtWidgets.QGroupBox("Plot Colors")
+        colors_layout = QtWidgets.QGridLayout()
+        
+        headers = ["Metric", "Line Color", "Axis/Text Color"]
+        for col, h in enumerate(headers):
+            colors_layout.addWidget(QtWidgets.QLabel(f"<b>{h}</b>"), 0, col)
+
+        self.color_widgets = {}
+        plot_metrics = [
+            ("cpm", "CPM"), 
+            ("creds", "Credits"), 
+            ("kpm", "KPM (Tab)"), 
+            ("log_kpm", "KPM (Log)"), 
+            ("live", "Live Enemies"), 
+            ("fps", "FPS")
+        ]
+
+        for i, (key, label) in enumerate(plot_metrics):
+            row = i + 1
+            colors_layout.addWidget(QtWidgets.QLabel(label), row, 0)
+            
+            btn_line = self.create_color_button(self.plot_config["plots"][key]["line"])
+            colors_layout.addWidget(btn_line, row, 1)
+            
+            btn_axis = self.create_color_button(self.plot_config["plots"][key]["axis"])
+            colors_layout.addWidget(btn_axis, row, 2)
+            
+            self.color_widgets[key] = (btn_line, btn_axis)
+
+        colors_group.setLayout(colors_layout)
+        layout_appear.addWidget(colors_group)
+
+        layout_appear.addStretch()
+        self.tabs.addTab(tab_appearance, "Appearance")
+
+        # ================= TAB 5: OVERLAY =================
         tab_overlay = QtWidgets.QWidget()
         tab_overlay.setObjectName("TabPage")
         layout_overlay = QtWidgets.QVBoxLayout(tab_overlay)
@@ -507,7 +574,7 @@ class SettingsDialog(QtWidgets.QDialog):
         layout_overlay.addStretch()
         self.tabs.addTab(tab_overlay, "Overlay")
 
-        # ================= TAB 5: ADVANCED =================
+        # ================= TAB 6: ADVANCED =================
         tab_advanced = QtWidgets.QWidget()
         tab_advanced.setObjectName("TabPage")
         layout_adv = QtWidgets.QVBoxLayout(tab_advanced)
@@ -613,6 +680,17 @@ class SettingsDialog(QtWidgets.QDialog):
         self.update_checker = UpdateChecker(self.version)
         self.update_checker.sig_update_found.connect(self.show_update_popup)
         self.update_checker.start()
+
+    def create_color_button(self, color):
+        btn = QtWidgets.QPushButton()
+        btn.setStyleSheet(f"background-color: {color}; border: 1px solid #555;")
+        btn.clicked.connect(lambda: self.pick_color(btn))
+        return btn
+
+    def pick_color(self, btn):
+        color = QtWidgets.QColorDialog.getColor()
+        if color.isValid():
+            btn.setStyleSheet(f"background-color: {color.name()}; border: 1px solid #555;")
 
     def show_update_popup(self, tag, title):
         QtWidgets.QMessageBox.information(self, "Update Available", 
@@ -864,6 +942,21 @@ class SettingsDialog(QtWidgets.QDialog):
         self.accept()
 
     def handle_config_button(self):
+        # Helper to extract color from button stylesheet
+        def get_color(btn):
+            style = btn.styleSheet()
+            if "background-color:" in style:
+                return style.split("background-color:")[1].split(";")[0].strip()
+            return "#FFFFFF"
+
+        # Update plot_config from UI
+        self.plot_config["background_opacity"] = self.slider_bg_opacity.value()
+        for key, (btn_line, btn_axis) in self.color_widgets.items():
+            self.plot_config["plots"][key] = {
+                "line": get_color(btn_line),
+                "axis": get_color(btn_axis)
+            }
+
         msg = QtWidgets.QMessageBox(self)
         msg.setWindowTitle("Config Options")
         msg.setText("Choose an action:")
@@ -1018,6 +1111,15 @@ class SettingsDialog(QtWidgets.QDialog):
         if "effigy_config" in data:
             self.effigy_config = data["effigy_config"]
 
+        if "plot_config" in data:
+            self.plot_config = data["plot_config"]
+            self.slider_bg_opacity.setValue(self.plot_config.get("background_opacity", 100))
+            plots_cfg = self.plot_config.get("plots", {})
+            for key, (btn_line, btn_axis) in self.color_widgets.items():
+                if key in plots_cfg:
+                    btn_line.setStyleSheet(f"background-color: {plots_cfg[key].get('line', '#FFFFFF')}; border: 1px solid #555;")
+                    btn_axis.setStyleSheet(f"background-color: {plots_cfg[key].get('axis', '#FFFFFF')}; border: 1px solid #555;")
+
         if "overlay_config" in data:
             self.overlay_config = data["overlay_config"]
         self.line_pb.setText(data.get("pb_file", ""))
@@ -1054,6 +1156,7 @@ class SettingsDialog(QtWidgets.QDialog):
             "use_sound": self.check_sound.isChecked(),
             "debug_mode": self.check_debug.isChecked(),
             "sound_config": self.sound_config,
+            "plot_config": self.plot_config,
             "track_logs": self.check_logs.isChecked(),
             "add_log_kpm_plot": self.check_add_log_kpm.isChecked(),
             "log_kpm_rolling": (self.combo_kpm_mode.currentIndex() == 1),

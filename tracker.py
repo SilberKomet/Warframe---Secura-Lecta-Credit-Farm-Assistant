@@ -224,6 +224,7 @@ class WarframeTracker(QtCore.QObject):
         self.debug_mode = self.settings['debug_mode']
         self.sound_config = self.settings.get("sound_config", {})
         self.use_overlay = self.settings.get('use_overlay', False)
+        self.plot_config = self.settings.get('plot_config', {})
         
         self.effigy_threshold = 3 if self.settings.get('mode', 'Solo') == 'Duo' else 1
         print(f"[Init] Effigy Warning Threshold set to {self.effigy_threshold} (Mode: {self.settings.get('mode', 'Solo')})")
@@ -262,6 +263,13 @@ class WarframeTracker(QtCore.QObject):
         if self.always_on_top:
             self.win.setWindowFlags(self.win.windowFlags() | QtCore.Qt.WindowStaysOnTopHint)
         self.win.show()
+        
+        # Apply Background Opacity
+        opacity = self.plot_config.get("background_opacity", 100)
+        if opacity < 100:
+            self.win.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+            self.win.setBackground(QtGui.QColor(0, 0, 0, int(255 * opacity / 100)))
+        
         self.win.resize(800, 500)
         self.win.ci.layout.setSpacing(30)
         
@@ -295,6 +303,17 @@ class WarframeTracker(QtCore.QObject):
             else:
                 if i > 0:
                     self.win.nextRow()
+            
+            # Get colors for this plot type
+            p_colors = self.plot_config.get("plots", {}).get(p_type, {"line": "y", "axis": "w"})
+            line_color = p_colors.get("line", "y")
+            axis_color = p_colors.get("axis", "w")
+            
+            # Helper to set axis colors
+            def style_plot(plot_item, color):
+                plot_item.getAxis('left').setPen(color); plot_item.getAxis('left').setTextPen(color)
+                plot_item.getAxis('bottom').setPen(color); plot_item.getAxis('bottom').setTextPen(color)
+                plot_item.setTitle(plot_item.titleLabel.text, color=color)
 
             # Plot Creation
             args = {}
@@ -312,6 +331,7 @@ class WarframeTracker(QtCore.QObject):
             p.getAxis('left').setTickFont(my_font)
             p.getAxis('bottom').enableAutoSIPrefix(False)
             p.setLabel('bottom', 'Time (min)')
+            style_plot(p, axis_color)
             
             # We will add PB curves here, but initialize them as None first
 
@@ -321,11 +341,11 @@ class WarframeTracker(QtCore.QObject):
                 title = "Credits Per Minute (CPM)"
                 if self.cpm_rolling:
                     title = f"CPM (Rolling {self.cpm_window}s)"
-                p.setTitle(title, size="16pt")
+                p.setTitle(title, size="16pt", color=axis_color)
                 p.setAxisItems({'left': LargeNumberAxisItem(orientation='left')})
                 p.setLabel('left', 'CPM')
-                self.curve_cpm = p.plot(pen='y', symbol='o')
-                self.curve_cpm_pb = p.plot(pen=pg.mkPen('y', style=QtCore.Qt.DotLine))
+                self.curve_cpm = p.plot(pen=line_color, symbol='o', symbolBrush=line_color)
+                self.curve_cpm_pb = p.plot(pen=pg.mkPen(line_color, style=QtCore.Qt.DotLine))
                 
                 if self.show_high_cpm:
                     self.cpm_high_line = pg.InfiniteLine(angle=0, pen=pg.mkPen('w', style=QtCore.Qt.DashLine))
@@ -333,44 +353,44 @@ class WarframeTracker(QtCore.QObject):
             
             elif p_type == 'creds':
                 self.plot_creds = p
-                p.setTitle("Total Credits", size="16pt")
+                p.setTitle("Total Credits", size="16pt", color=axis_color)
                 p.setLabel('left', 'Credits')
-                self.curve_creds = p.plot(pen='g', symbol='o')
-                self.curve_creds_pb = p.plot(pen=pg.mkPen('g', style=QtCore.Qt.DotLine))
+                self.curve_creds = p.plot(pen=line_color, symbol='o', symbolBrush=line_color)
+                self.curve_creds_pb = p.plot(pen=pg.mkPen(line_color, style=QtCore.Qt.DotLine))
 
             elif p_type == 'kpm':
                 self.plot_kpm = p
                 title = "Kills Per Minute (KPM)"
                 if self.tab_kpm_rolling:
                     title = f"KPM (Rolling {self.tab_kpm_window}s)"
-                p.setTitle(title, size="16pt")
+                p.setTitle(title, size="16pt", color=axis_color)
                 p.setLabel('left', 'KPM')
-                self.curve_kpm = p.plot(pen='r', symbol='o')
-                self.curve_kpm_pb = p.plot(pen=pg.mkPen('r', style=QtCore.Qt.DotLine))
+                self.curve_kpm = p.plot(pen=line_color, symbol='o', symbolBrush=line_color)
+                self.curve_kpm_pb = p.plot(pen=pg.mkPen(line_color, style=QtCore.Qt.DotLine))
 
             elif p_type == 'log_kpm':
                 self.plot_log_kpm = p
                 title = "Log KPM (Cumulative)"
                 if self.log_kpm_rolling:
                     title = f"Log KPM (Rolling {self.log_kpm_window}s)"
-                p.setTitle(title, size="16pt")
+                p.setTitle(title, size="16pt", color=axis_color)
                 p.setLabel('left', 'KPM')
-                self.curve_log_kpm = p.plot(pen='m', name='Log KPM')
-                self.curve_log_kpm_pb = p.plot(pen=pg.mkPen('m', style=QtCore.Qt.DotLine))
+                self.curve_log_kpm = p.plot(pen=line_color, name='Log KPM')
+                self.curve_log_kpm_pb = p.plot(pen=pg.mkPen(line_color, style=QtCore.Qt.DotLine))
 
             elif p_type == 'fps':
                 self.plot_fps = p
-                p.setTitle("Frames Per Second", size="16pt")
+                p.setTitle("Frames Per Second", size="16pt", color=axis_color)
                 p.setLabel('left', 'FPS')
-                self.curve_fps = p.plot(pen='c', name='FPS')
-                self.curve_fps_pb = p.plot(pen=pg.mkPen('c', style=QtCore.Qt.DotLine))
+                self.curve_fps = p.plot(pen=line_color, name='FPS')
+                self.curve_fps_pb = p.plot(pen=pg.mkPen(line_color, style=QtCore.Qt.DotLine))
 
             elif p_type == 'live':
                 self.plot_live = p
-                p.setTitle("Amount of alive enemies", size="16pt")
+                p.setTitle("Amount of alive enemies", size="16pt", color=axis_color)
                 p.setLabel('left', 'Count')
-                self.curve_live = p.plot(pen='c', name='num alive')
-                self.curve_live_pb = p.plot(pen=pg.mkPen('c', style=QtCore.Qt.DotLine))
+                self.curve_live = p.plot(pen=line_color, name='num alive')
+                self.curve_live_pb = p.plot(pen=pg.mkPen(line_color, style=QtCore.Qt.DotLine))
 
 
         # --- Load Overlay Positions (Early) ---
@@ -874,6 +894,32 @@ class WarframeTracker(QtCore.QObject):
                  self.log(f"Log KPM Mode: {kpm_mode_str}")
                  self.log(f"Add Log KPM Plot: {self.add_log_kpm_plot}")
                  self.log(f"Acolyte Warner: {self.settings.get('acolyte_warner_enabled', False)}")
+            
+            # --- Detailed Configuration Dump ---
+            self.log("--- DETAILED CONFIGURATION DUMP ---")
+            self.log(f"Scan Area 1: [{self.scan_left}, {self.scan_top}, {self.scan_right}, {self.scan_lower}]")
+            self.log(f"Credit Positions 1: {self.credit_positions}")
+            
+            if hasattr(self, 'scan_left_2') and self.scan_left_2 > 0:
+                self.log(f"Scan Area 2: [{self.scan_left_2}, {self.scan_top_2}, {self.scan_right_2}, {self.scan_lower_2}]")
+                self.log(f"Credit Positions 2: {self.credit_positions_2}")
+            
+            if self.track_kills and hasattr(self, 'left_kills'):
+                self.log(f"Kills Box: [{self.left_kills}, {self.top_kills}, {self.right_kills}, {self.lower_kills}]")
+
+            self.log(f"Plot Config: {json.dumps(self.plot_config)}")
+            if self.use_overlay:
+                self.log(f"Overlay Config: {json.dumps(self.settings.get('overlay_config', {}))}")
+                if os.path.exists(self.overlay_positions_file):
+                    try:
+                        with open(self.overlay_positions_file, 'r') as f:
+                            self.log(f"Overlay Positions: {f.read()}")
+                    except: pass
+            
+            if self.use_sound:
+                self.log(f"Sound Config: {json.dumps(self.sound_config)}")
+
+            self.log(f"Full Settings: {json.dumps(self.settings, default=str)}")
             self.log("-" * 40)
         except Exception as e:
             print(f"[CRITICAL] Could not create output folder. Error: {e}")
