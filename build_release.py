@@ -90,6 +90,10 @@ def build_full_release(source_dir, project_root):
     # Remove any existing .json configs or logs that might have been copied from your personal setup
     print("Cleaning up developer-specific config/log files from release build...")
     for item in os.listdir(scripts_dst):
+        # Skip essential assets so they aren't deleted by the .png filter below
+        if item in ["Background.png", "Credits.png"]:
+            continue
+            
         if item.endswith(".json") or item.endswith(".png") or item == "OUTPUT":
             path_to_remove = os.path.join(scripts_dst, item)
             print(f"  - Removing: {item}")
@@ -140,8 +144,6 @@ def build_update_package(source_dir, project_root):
 
     # 3. Create and add the apply_update.bat script
     apply_update_bat_content = r"""@echo off
-setlocal
-
 echo =================================================================
 echo = Warframe Lecta Tracker - Update Script
 echo =================================================================
@@ -165,23 +167,31 @@ if not defined INSTALL_PATH (
     goto get_path
 )
 
+rem --- Check all possible folder structures sequentially to avoid crashes ---
+
 set "TARGET_DIR=%INSTALL_PATH%\LECTA_SCRIPTS"
+if exist "%TARGET_DIR%" goto ready_to_copy
 
-if not exist "%TARGET_DIR%" (
-    echo.
-    echo ERROR: Could not find the 'LECTA_SCRIPTS' folder inside the path
-    echo you provided: %INSTALL_PATH%
-    echo.
-    echo Please make sure you are selecting the correct main installation folder
-    echo (the one that contains 'Start_Tracker.bat').
-    echo.
-    goto get_path
-)
+set "TARGET_DIR=%INSTALL_PATH%\python_and_required_packages\LECTA_SCRIPTS"
+if exist "%TARGET_DIR%" goto ready_to_copy
 
+set "TARGET_DIR=%INSTALL_PATH%\Source"
+if exist "%TARGET_DIR%" goto ready_to_copy
+
+echo.
+echo ERROR: Could not find the scripts folder inside the path you provided:
+echo "%INSTALL_PATH%"
+echo.
+echo Please make sure you are selecting the correct main installation folder.
+echo.
+pause
+goto get_path
+
+:ready_to_copy
 set "SOURCE_DIR=%~dp0LECTA_SCRIPTS"
 
 echo.
-echo The following directory will be updated: %TARGET_DIR%
+echo The following directory will be updated: "%TARGET_DIR%"
 echo.
 choice /C YN /M "Do you want to proceed with the update?"
 if errorlevel 2 (

@@ -178,6 +178,7 @@ class WarframeTracker(QtCore.QObject):
         """Initializes or re-initializes the tracker session based on current settings."""
         
         # Reset Data Containers
+        
         self.creds = []
         self.confidences = []
         self.credit_positions = []
@@ -299,6 +300,7 @@ class WarframeTracker(QtCore.QObject):
             self.win.resize(800, 500) # Default size for the very first launch
             
         self.win.ci.layout.setSpacing(30)
+        self.win.ci.layout.setContentsMargins(15, 35, 15, 15)
 
 
         
@@ -325,6 +327,12 @@ class WarframeTracker(QtCore.QObject):
         num_plots = len(active_plots)
         use_grid = num_plots >= 4
 
+        def style_plot(plot_item, color):
+                plot_item.getAxis('left').setPen(color)
+                plot_item.getAxis('left').setTextPen(color)
+                plot_item.getAxis('bottom').setPen(color)
+                plot_item.getAxis('bottom').setTextPen(color)
+
         for i, p_type in enumerate(active_plots):
             # Grid Management
             if use_grid:
@@ -338,63 +346,55 @@ class WarframeTracker(QtCore.QObject):
             p_colors = self.plot_config.get("plots", {}).get(p_type, {"line": "y", "axis": "w"})
             line_color = p_colors.get("line", "y")
             axis_color = p_colors.get("axis", "w")
-            # Ensure color is valid hex for HTML title
             axis_color_hex = pg.mkColor(axis_color).name()
             
             # Helper to set axis colors
-            def style_plot(plot_item, color):
-                plot_item.getAxis('left').setPen(color); plot_item.getAxis('left').setTextPen(color)
-                plot_item.getAxis('bottom').setPen(color); plot_item.getAxis('bottom').setTextPen(color)
+            
 
-            # Determine Title String (Pre-Injection Fix)
+            # Determine Title String
             title_str = ""
             if p_type == 'cpm':
-                title_str = "Credits Per Minute (CPM)"
-                if self.cpm_rolling:
-                    title_str = f"CPM (Rolling {self.cpm_window}s)"
+                title_str = f"CPM (Rolling {self.cpm_window}s)" if self.cpm_rolling else "Credits Per Minute (CPM)"
             elif p_type == 'creds':
                 title_str = "Total Credits"
             elif p_type == 'kpm':
-                title_str = "Kills Per Minute (KPM)"
-                if self.tab_kpm_rolling:
-                    title_str = f"KPM (Rolling {self.tab_kpm_window}s)"
+                title_str = f"KPM (Rolling {self.tab_kpm_window}s)" if self.tab_kpm_rolling else "Kills Per Minute (KPM)"
             elif p_type == 'log_kpm':
-                title_str = "Log KPM (Cumulative)"
-                if self.log_kpm_rolling:
-                    title_str = f"Log KPM (Rolling {self.log_kpm_window}s)"
+                title_str = f"Log KPM (Rolling {self.log_kpm_window}s)" if self.log_kpm_rolling else "Log KPM (Cumulative)"
             elif p_type == 'fps':
                 title_str = "Frames Per Second"
             elif p_type == 'live':
                 title_str = "Amount of alive enemies"
 
-            # Plot Creation
+            # Plot Creation Arguments
+            # Plot Creation Arguments
             args = {}
-            # Special case: 5 plots -> last one spans 2 columns
             if use_grid and num_plots == 5 and i == 4:
                 args['colspan'] = 2
-            
-            # Axis items for Credits 
-            if p_type in ['creds', 'cpm']:
-                args['axisItems'] = {'left': LargeNumberAxisItem(orientation='left')}
-            
-            # Inject Title directly into setup args (Fixes 0-height layout bug)
-            if title_str:
-                args['title'] = f'<span style="color: {axis_color_hex}; font-size: 16pt;">{title_str}</span>'
 
+            # 1. CREATE PLOT FIRST (Ohne Titel in den Argumenten, um den Row-0-Bug zu umgehen)
             p = self.win.addPlot(**args)
+            
+            # 2. GRAFT CUSTOM FORMATTING
+            if p_type in ['creds', 'cpm']:
+                custom_axis = LargeNumberAxisItem(orientation='left')
+                p.getAxis('left').tickStrings = custom_axis.tickStrings
+            
+            # 3. TITEL NACHTRÄGLICH SETZEN
+            if title_str:
+                p.setTitle(title_str, color=axis_color, size="16pt")
             
             # Lock down mouse interaction (zoom/pan)
             p.setMouseEnabled(x=False, y=False)
             p.hideButtons()
             
+            # Apply Styling
             p.showGrid(x=True, y=True)
             p.getAxis('bottom').setTickFont(my_font)
             p.getAxis('left').setTickFont(my_font)
             p.getAxis('bottom').enableAutoSIPrefix(False)
             p.setLabel('bottom', 'Time (min)')
             style_plot(p, axis_color)
-            
-            # We will add PB curves here, but initialize them as None first
 
             # Specific Configuration
             if p_type == 'cpm':
@@ -402,11 +402,10 @@ class WarframeTracker(QtCore.QObject):
                 p.setLabel('left', 'CPM')
                 self.curve_cpm = p.plot(pen=line_color, symbol='o', symbolBrush=line_color)
                 self.curve_cpm_pb = p.plot(pen=pg.mkPen(line_color, style=QtCore.Qt.DotLine))
-                
                 if self.show_high_cpm:
                     self.cpm_high_line = pg.InfiniteLine(angle=0, pen=pg.mkPen('w', style=QtCore.Qt.DashLine))
                     p.addItem(self.cpm_high_line)
-            
+                    
             elif p_type == 'creds':
                 self.plot_creds = p
                 p.setLabel('left', 'Credits')
@@ -824,15 +823,14 @@ class WarframeTracker(QtCore.QObject):
         opacity = self.plot_config.get("background_opacity", 100)
         
         # 1. Main Graph Window (Lightweight Qt lock to prevent ghosting)
-        if opacity < 100:
-            current_geom = self.win.geometry()
-            self.win.hide()
-            flags = self.win.windowFlags()
-            flags |= QtCore.Qt.FramelessWindowHint
-            self.win.setWindowFlags(flags)
-            self.win.show()
-            self.win.setGeometry(current_geom)
-            self.win.raise_()
+        current_geom = self.win.geometry()
+        self.win.hide()
+        flags = self.win.windowFlags()
+        flags |= QtCore.Qt.FramelessWindowHint
+        self.win.setWindowFlags(flags)
+        self.win.show()
+        self.win.setGeometry(current_geom)
+        self.win.raise_()
         self.win.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
         
         
@@ -1614,16 +1612,19 @@ class WarframeTracker(QtCore.QObject):
         opacity = self.plot_config.get("background_opacity", 100)
         
         # 1. Main Graph Window
-        if opacity < 100:
-            current_geom = self.win.geometry()
-            self.win.hide()
-            flags = self.win.windowFlags()
-            flags &= ~QtCore.Qt.FramelessWindowHint
-            self.win.setWindowFlags(flags)
-            self.win.show()
-            self.win.setGeometry(current_geom)
-            self.win.raise_()
+        # 1. Main Graph Window
+        current_geom = self.win.geometry()
+        self.win.hide()
+        flags = self.win.windowFlags()
+        flags &= ~QtCore.Qt.FramelessWindowHint
+        self.win.setWindowFlags(flags)
+        
+        # Apply the transparent-for-mouse-events fix BEFORE drawing the frame
         self.win.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, False)
+        
+        self.win.show()
+        self.win.setGeometry(current_geom)
+        self.win.raise_()
         
         # 2. Number Overlays
         for ov in self.number_overlays.values():
@@ -1838,16 +1839,32 @@ class WarframeTracker(QtCore.QObject):
         QtCore.QTimer.singleShot(100, self.prompt_next_run)
 
     def prompt_next_run(self):
-        # Wake up the ORIGINAL Settings Dialog instead of making a duplicate
+        # Wake up the ORIGINAL Settings Dialog non-modally
         if self.dialog:
             self.dialog.check_load_prev.setChecked(True)
             self.dialog.load_previous_settings(True)
             
-            # Show the dialog. If the user clicks 'Start Tracker', it returns Accepted.
-            if self.dialog.exec_() == QtWidgets.QDialog.Accepted:
-                self.settings = self.dialog.get_settings()
-                self.setup_session() # This wipes the plots, applies new settings, and restores geometry
-            else:
-                # User clicked the 'X' to close the app entirely
-                print("[End] App closed by user.")
-                self.app.quit()
+            # Disconnect any old signals to prevent them from firing twice
+            try:
+                self.dialog.accepted.disconnect()
+                self.dialog.rejected.disconnect()
+            except TypeError:
+                pass # Signals were not connected yet
+                
+            # Wire up the event-driven signals
+            self.dialog.accepted.connect(self._on_dialog_accepted)
+            self.dialog.rejected.connect(self._on_dialog_rejected)
+            
+            # Show the dialog without locking the rest of the application
+            self.dialog.show()
+            self.dialog.raise_()
+            self.dialog.activateWindow()
+
+    def _on_dialog_accepted(self):
+        self.settings = self.dialog.get_settings()
+        self.setup_session() # This wipes the plots, applies new settings, and restores geometry
+
+    def _on_dialog_rejected(self):
+        # User clicked the 'X' to close the app entirely
+        print("[End] App closed by user.")
+        self.app.quit()

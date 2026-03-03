@@ -44,8 +44,10 @@ but now:
 ---
 
 ## Example
-<a href="https://www.youtube.com/watch?v=" target="_blank">
-  <img src="https://img.youtube.com/vi//maxresdefault.jpg" alt="Warframe Lecta Tracker Demo" width="100%" />
+0:00 - 2:43 is Settings and GUI example; onwards is Gameplay. _FPS was not tracking correctly due to some setting that was messing with the graph, i confirmed right after recording that it works._
+
+<a href="https://www.youtube.com/watch?v=ULtYCHbasL0" target="_blank">
+  <img src="https://img.youtube.com/vi/ULtYCHbasL0/maxresdefault.jpg" alt="Warframe Lecta Tracker Demo" width="75%" />
 </a>
 
 *Click the image above to watch the demo video.*
@@ -145,5 +147,3 @@ For a detailed explanation of the CSV data, runtime logs, and debug files, pleas
 * Tracking the FPS requires `PresentMon.exe` to be run as Administrator hence you will be asked to rerun as Administrator.
 * ``EE.log`` based KPM works best in faster paced enviroments, so no earth non SP capture e.g. is recommended. Though this is for Secura LEcta Credit farm, where enemies spawn constantly. 
 * You can load already recorded runs (`master_run_log.csv`) from yourself or others into the tracker, this will add plots when you start so you can compare yourself to another Run (e.g. your own PB). You have the option to either let the PB run plot itself along with your data (recommended for readability and visability) or you can plot the entire PB plot and just have your current run plot live. Either way the `run_plots.png` and `enemy_plots.png` will include both runs across your recorded time window.
-
-
