@@ -82,7 +82,7 @@ If you have Python installed and want to run the raw scripts/edit the code yours
 ### Option 1: Update Package (Easiest)
 For updating an existing installation without re-downloading the large Python environment.
 1. Go to the Releases page.
-2. Download the latest `Update_Tracker_vX.X.X.zip` file.
+2. Download the latest `Update_Version.zip` file.
 3. Extract it anywhere.
 4. Run `apply_update.bat`.
 5. When prompted, drag and drop your main Lecta Tracker folder (the one with `Start_Tracker.bat`) into the command window and press Enter.
