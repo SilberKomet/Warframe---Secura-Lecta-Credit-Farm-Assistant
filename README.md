@@ -59,7 +59,7 @@ but now:
 ### Option 1: Embeddable folder for easy use
 **Python and packages are embedded within**
 1. Go to the Releases page.
-2. Download the latest `.zip` file.
+2. Download the latest `Farming_Assistant_VX.zip` file.
 3. Extract it anywhere.
 4. Run `Start_Tracker.bat`.
 
