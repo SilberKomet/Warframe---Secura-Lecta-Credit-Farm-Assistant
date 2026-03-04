@@ -1548,7 +1548,7 @@ class WarframeTracker(QtCore.QObject):
             try:
                 val = self.fps_tracker.get_fps()
                 if val is not None:
-                    self.state_fps = float(val)
+                    self.state_fps = int(val)
             except (ValueError, TypeError):
                 pass
 
