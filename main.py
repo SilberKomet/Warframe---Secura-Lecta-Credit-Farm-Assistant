@@ -29,7 +29,7 @@ pygame.init() # Initialize all imported pygame modules
 
 
 
-import easyocr
+#import easyocr
 from settings_dialog import SettingsDialog
 from tracker import WarframeTracker
 
@@ -108,12 +108,40 @@ if __name__ == "__main__":
         }
         QListWidget { background-color: #252526; border: 1px solid #333333; border-radius: 4px; color: white; }
         QScrollArea { border: none; background: transparent; }
+
+        QCheckBox::indicator {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #555;
+            border-radius: 4px;
+            background: #252526;
+        }
+        QCheckBox::indicator:checked {
+            background-color: #2ea043;
+            border-color: #2ea043;
+            image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBvbHlsaW5lIHBvaW50cz0iMjAgNiA5IDE3IDQgMTIiPjwvcG9seWxpbmU+PC9zdmc+);
+        }
+        QCheckBox::indicator:hover { border-color: #3fb950; }
+
+        QRadioButton::indicator {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #555;
+            border-radius: 11px;
+            background: #252526;
+        }
+        QRadioButton::indicator:checked {
+            background-color: #2ea043;
+            border-color: #2ea043;
+            image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iNiIvPjwvc3ZnPg==);
+        }
+        QRadioButton::indicator:hover { border-color: #3fb950; }
     """)
     
     pg.setConfigOption('background', '#191919')
     pg.setConfigOption('foreground', '#E6E6E6')
 
-    APP_VERSION = "v2.0"
+    APP_VERSION = "v3.1"
     # Show Settings Dialog
     dialog = SettingsDialog(version=APP_VERSION)
     if dialog.exec_() == QtWidgets.QDialog.Accepted:

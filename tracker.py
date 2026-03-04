@@ -30,6 +30,107 @@ from settings_dialog import SettingsDialog
 pydirectinput.FAILSAFE = False
 warnings.filterwarnings("ignore", message=".pin_memory.")
 
+class ResultsWindow(pg.GraphicsLayoutWidget):
+    def __init__(self, data, settings, plot_config, pb_data=None, parent=None):
+        super().__init__(parent=parent, title="Run Results")
+        self.resize(1000, 600)
+        self.data = data
+        self.settings = settings
+        self.plot_config = plot_config
+        self.pb_data = pb_data
+        
+        # Apply background
+        self.setBackground('#191919')
+        self.ci.layout.setSpacing(30)
+        self.ci.layout.setContentsMargins(15, 35, 15, 15)
+        
+        self.init_plots()
+
+    def init_plots(self):
+        my_font = QtGui.QFont()
+        my_font.setPointSize(12)
+
+        active_plots = []
+        pb_cols = self.pb_data.columns if self.pb_data is not None else []
+        
+        track_credits = self.settings.get('track_credits', False)
+        track_kills = self.settings.get('track_kills', False)
+        track_logs = self.settings.get('track_logs', False)
+        track_fps = self.settings.get('track_fps', False)
+        add_log_kpm = self.settings.get('add_log_kpm_plot', False)
+
+        if track_credits or 'CPM' in pb_cols or 'Credits' in pb_cols:
+            active_plots.extend(['cpm', 'creds'])
+        if track_kills or 'KPM' in pb_cols:
+            active_plots.append('kpm')
+        if track_logs or 'Spawned' in pb_cols or 'Live' in pb_cols:
+            active_plots.append('live')
+            if add_log_kpm or 'Log_KPM' in pb_cols:
+                active_plots.append('log_kpm')
+        if track_fps or 'FPS' in pb_cols:
+            active_plots.append('fps')
+
+        num_plots = len(active_plots)
+        use_grid = num_plots >= 4
+
+        def style_plot(plot_item, color):
+            plot_item.getAxis('left').setPen(color)
+            plot_item.getAxis('left').setTextPen(color)
+            plot_item.getAxis('bottom').setPen(color)
+            plot_item.getAxis('bottom').setTextPen(color)
+
+        for i, p_type in enumerate(active_plots):
+            if use_grid:
+                if i > 0 and i % 2 == 0:
+                    self.nextRow()
+            else:
+                if i > 0:
+                    self.nextRow()
+
+            p_colors = self.plot_config.get("plots", {}).get(p_type, {"line": "y", "axis": "w"})
+            line_color = p_colors.get("line", "y")
+            axis_color = p_colors.get("axis", "w")
+
+            args = {}
+            if use_grid and num_plots == 5 and i == 4:
+                args['colspan'] = 2
+
+            p = self.addPlot(**args)
+            
+            if p_type in ['creds', 'cpm']:
+                custom_axis = LargeNumberAxisItem(orientation='left')
+                p.getAxis('left').tickStrings = custom_axis.tickStrings
+            
+            p.showGrid(x=True, y=True)
+            p.getAxis('bottom').setTickFont(my_font)
+            p.getAxis('left').setTickFont(my_font)
+            p.getAxis('bottom').enableAutoSIPrefix(False)
+            p.setLabel('bottom', 'Time (min)')
+            style_plot(p, axis_color)
+
+            # Plot Data
+            if p_type == 'cpm':
+                p.setTitle(f"CPM (Rolling {self.settings.get('cpm_window', 300)}s)" if self.settings.get('cpm_rolling') else "Credits Per Minute (CPM)", color=axis_color, size="16pt")
+                p.plot(self.data['time_credits'], self.data['cpm'], pen=line_color, symbol='o', symbolBrush=line_color)
+            elif p_type == 'creds':
+                p.setTitle("Total Credits", color=axis_color, size="16pt")
+                p.plot(self.data['time_credits'], self.data['creds'], pen=line_color, symbol='o', symbolBrush=line_color)
+            elif p_type == 'kpm':
+                p.setTitle(f"KPM (Rolling {self.settings.get('tab_kpm_window', 300)}s)" if self.settings.get('tab_kpm_rolling') else "Kills Per Minute (KPM)", color=axis_color, size="16pt")
+                p.plot(self.data['time_kills'], self.data['kpm'], pen=line_color, symbol='o', symbolBrush=line_color)
+            elif p_type == 'log_kpm':
+                p.setTitle(f"Log KPM (Rolling {self.settings.get('log_kpm_window', 60)}s)" if self.settings.get('log_kpm_rolling') else "Log KPM (Cumulative)", color=axis_color, size="16pt")
+                if self.data.get('plot_data_log_kpm'):
+                    p.plot(self.data['plot_data_log_kpm']['t'], self.data['plot_data_log_kpm']['y'], pen=line_color)
+            elif p_type == 'fps':
+                p.setTitle("Frames Per Second", color=axis_color, size="16pt")
+                if self.data.get('plot_data_fps'):
+                    p.plot(self.data['plot_data_fps']['t'], self.data['plot_data_fps']['y'], pen=line_color)
+            elif p_type == 'live':
+                p.setTitle("Amount of alive enemies", color=axis_color, size="16pt")
+                if self.data.get('enemy_data'):
+                    p.plot(self.data['enemy_data']['time'], self.data['enemy_data']['live'], pen=line_color)
+
 class WarframeTracker(QtCore.QObject):
     data_updated = QtCore.pyqtSignal()
     request_overlay_toggle = QtCore.pyqtSignal()
@@ -84,6 +185,7 @@ class WarframeTracker(QtCore.QObject):
         self.ee_log_path = os.path.expandvars(r"%LOCALAPPDATA%\Warframe\EE.log")
         self.ee_log_start_offset = None
         
+        self.results_win = None
         self.fps_tracker = FPSTracker()
         self.log_timer = QtCore.QTimer()
         self.log_timer.timeout.connect(self.update_log_data)
@@ -822,16 +924,20 @@ class WarframeTracker(QtCore.QObject):
        # --- LOCK WINDOWS (Remove borders & make click-through) ---
         opacity = self.plot_config.get("background_opacity", 100)
         
-        # 1. Main Graph Window (Lightweight Qt lock to prevent ghosting)
+        # 1. Main Graph Window (Heavy OS lock to guarantee click-through)
         current_geom = self.win.geometry()
         self.win.hide()
         flags = self.win.windowFlags()
         flags |= QtCore.Qt.FramelessWindowHint
+        flags |= QtCore.Qt.WindowTransparentForInput # <-- Zwingt Windows, Klicks durchzulassen!
         self.win.setWindowFlags(flags)
+        
+        # Apply Qt-level click-through BEFORE showing
+        self.win.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
+        
         self.win.show()
         self.win.setGeometry(current_geom)
         self.win.raise_()
-        self.win.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
         
         
         # 2. Number Overlays (Heavy OS lock to defeat custom drag logic)
@@ -902,18 +1008,18 @@ class WarframeTracker(QtCore.QObject):
             self.curve_log_kpm_pb.setData([], [])
 
         
-            self.enemy_data = {"time": [], "live": [], "spawned": []}
-            if self.track_kills:
-                self.enemy_data["kills"] = []
-                self.enemy_data["kpm"] = []
-            self.plot_data_live = {"t": [], "y": []}
-            self.plot_data_spawned = {"t": [], "y": []}
-            self.plot_data_kpm = {"t": [], "y": []}
-            self.curve_live.setData([], [])
-            
-            if self.add_log_kpm_plot:
-                self.plot_data_log_kpm = {"t": [], "y": []}
-                self.curve_log_kpm.setData([], [])
+        self.enemy_data = {"time": [], "live": [], "spawned": []}
+        if self.track_kills:
+            self.enemy_data["kills"] = []
+            self.enemy_data["kpm"] = []
+        self.plot_data_live = {"t": [], "y": []}
+        self.plot_data_spawned = {"t": [], "y": []}
+        self.plot_data_kpm = {"t": [], "y": []}
+        self.curve_live.setData([], [])
+        
+        if self.add_log_kpm_plot:
+            self.plot_data_log_kpm = {"t": [], "y": []}
+            self.curve_log_kpm.setData([], [])
 
         if self.track_fps:
             self.plot_data_fps = {"t": [], "y": []}
@@ -1120,7 +1226,12 @@ class WarframeTracker(QtCore.QObject):
         time_mins = elapsed_time / 60
         # Update FPS state on Tab press too
         if self.track_fps:
-            self.state_fps = self.fps_tracker.get_fps()
+            try:
+                val = self.fps_tracker.get_fps()
+                if val is not None:
+                    self.state_fps = val
+            except (ValueError, TypeError):
+                pass
         
         # --- 1. Capture & Validate ---
         # Capture Scan Area first to check for menu presence
@@ -1332,10 +1443,10 @@ class WarframeTracker(QtCore.QObject):
 
 
         # Mark Event
-        if self.track_logs:
-            self.pending_event = "Scan"
-        else:
-            # If logs aren't running, we must record the row manually here
+        self.pending_event = "Scan"
+        
+        # If NEITHER background tracker is running, record the row manually here
+        if not self.track_logs and not self.track_fps:
             self.master_log.append({
                 "Time": round(elapsed_time, 2), "Live": 0, "Spawned": 0,
                 "Credits": self.state_credits, "CPM": self.state_cpm,
@@ -1343,6 +1454,7 @@ class WarframeTracker(QtCore.QObject):
                 "FPS": self.state_fps,
                 "Event": "Scan"
             })
+            self.pending_event = ""
 
         # --- Console Output ---
         log_msg = f"Scanned - Time: {time_mins:.2f}m"
@@ -1433,8 +1545,12 @@ class WarframeTracker(QtCore.QObject):
         
         # Get FPS
         if self.track_fps:
-            fps = self.fps_tracker.get_fps()
-            self.state_fps = fps
+            try:
+                val = self.fps_tracker.get_fps()
+                if val is not None:
+                    self.state_fps = float(val)
+            except (ValueError, TypeError):
+                pass
 
         live, spawned, ally_live = 0, 0, 0
         if self.track_logs and self.log_reader:
@@ -1607,41 +1723,10 @@ class WarframeTracker(QtCore.QObject):
         # Stop accepting new data immediately to prevent race conditions
         self.start_time = None
         
-        # --- UNLOCK WINDOWS (Restore borders & interaction) ---
-        print("[DEBUG] Run Ended. Restoring window interactions.")
-        opacity = self.plot_config.get("background_opacity", 100)
-        
-        # 1. Main Graph Window
-        # 1. Main Graph Window
-        current_geom = self.win.geometry()
-        self.win.hide()
-        flags = self.win.windowFlags()
-        flags &= ~QtCore.Qt.FramelessWindowHint
-        self.win.setWindowFlags(flags)
-        
-        # Apply the transparent-for-mouse-events fix BEFORE drawing the frame
-        self.win.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, False)
-        
-        self.win.show()
-        self.win.setGeometry(current_geom)
-        self.win.raise_()
-        
-        # 2. Number Overlays
-        for ov in self.number_overlays.values():
-            curr_geom = ov.geometry()
-            flags = ov.windowFlags()
-            flags &= ~QtCore.Qt.WindowTransparentForInput
-            ov.setWindowFlags(flags)
-            ov.show()
-            ov.setGeometry(curr_geom)
-            
-        # 3. Warners
-        if self.acolyte_warner:
-            self.acolyte_warner.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, False)
-            
-        if self.effigy_warner:
-            self.effigy_warner.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, False)
-        # ---------------------------------------
+        # Close the live window
+        if self.win:
+            self.win.close()
+            self.win = None
 
         if not self.run_output_path:
             output_dir = self.settings.get("output_path", os.path.join(os.getcwd(), "OUTPUT"))
@@ -1830,6 +1915,20 @@ class WarframeTracker(QtCore.QObject):
                 
         except Exception as e:
             print(f"[End] Error generating plots: {e}")
+
+        # Instantiate ResultsWindow
+        run_data = {
+            'time_credits': self.time_credits,
+            'cpm': self.cpm,
+            'creds': self.creds,
+            'time_kills': self.time_kills,
+            'kpm': self.kpm,
+            'enemy_data': self.enemy_data,
+            'plot_data_log_kpm': self.plot_data_log_kpm if hasattr(self, 'plot_data_log_kpm') else None,
+            'plot_data_fps': self.plot_data_fps if hasattr(self, 'plot_data_fps') else None
+        }
+        self.results_win = ResultsWindow(run_data, self.settings, self.plot_config, self.pb_data)
+        self.results_win.show()
 
         # Reset run state so a new run can be started
         self.run_output_path = None

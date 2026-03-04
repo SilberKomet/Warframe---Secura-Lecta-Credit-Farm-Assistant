@@ -13,7 +13,7 @@ class AnimatedToggle(QtWidgets.QCheckBox):
         self.setCursor(QtCore.Qt.PointingHandCursor)
         self._bar_color = QtGui.QColor("#555")
         self._handle_color = QtGui.QColor("#ddd")
-        self._checked_bar_color = QtGui.QColor("#2ea043")
+        self._checked_bar_color = QtGui.QColor("#3fb950")
         self._checked_handle_color = QtGui.QColor("#fff")
         
         self._handle_position = 0.0
@@ -45,9 +45,9 @@ class AnimatedToggle(QtWidgets.QCheckBox):
 
     def paintEvent(self, e: QtGui.QPaintEvent):
         contRect = self.contentsRect()
-        handleRadius = 8
-        barHeight = 16
-        barWidth = 36
+        handleRadius = 9
+        barHeight = 18
+        barWidth = 40
         
         p = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.Antialiasing)

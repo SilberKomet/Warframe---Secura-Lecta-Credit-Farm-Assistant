@@ -59,7 +59,7 @@ but now:
 ### Option 1: Embeddable folder for easy use
 **Python and packages are embedded within**
 1. Go to the Releases page.
-2. Download the latest `.zip` file.
+2. Download the latest `FARM_ASSISTANT_vX.X.Xzip` file.
 3. Extract it anywhere.
 4. Run `Start_Tracker.bat`.
 
@@ -135,6 +135,7 @@ For a detailed explanation of the CSV data, runtime logs, and debug files, pleas
 
 ## Requirements
 - Warframe must be running on the **Primary Monitor**.
+- Do not use the theme ``Darklotus, Vitruan``, as Scans have failed regulary on thoose Themes.
 - You must use either Borderless Fullscreen or Windowed Game Mode to be able to see the Number overlay.
 - Interface Scale in Warframe should be consistent (default 100 recommended).
 - **PresentMon.exe** must be in the ``LECTA_SCRIPTS`` for FPS tracking.
